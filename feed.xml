@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>每日理论推送 [00]</title>
+    <description>coming soon</description>
+    <link>about:blank</link>
+    <item>
+      <title>RSS 订阅链接 - 本地静态文件版</title>
+      <description><![CDATA[
+      <p>当前生成的 feed 文件路径：</p>
+      <pre>D:/HermesData/workspace/rss/feed.xml</pre>
+      <p>很多阅读器不支持 file://，所以这里直接给出一条 RSS 阅读器可订阅的等效说明。</p>
+      ]]></description>
+      <guid>rss-setup</guid>
+      <pubDate>Wed, 17 Jun 2026 00:00:00 +0800</pubDate>
+      <link>file:///D:/HermesData/workspace/rss/feed.xml</link>
+    </item>
+  </channel>
+</rss>
