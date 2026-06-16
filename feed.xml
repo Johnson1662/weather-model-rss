@@ -5,7 +5,7 @@
     <link>https://johnson1662.github.io/weather-model-rss/</link>
     <description>围绕2026年先导杯"基于国产科学智算生态的气象大模型推理部署优化"赛题，每日推送一篇精讲文章，从零讲解模型压缩、加速、量化的核心知识。</description>
     <language>zh-CN</language>
-    <lastBuildDate>2026-06-16 20:30:00 +0800</lastBuildDate>
+    <lastBuildDate>2026-06-16 21:00:00 +0800</lastBuildDate>
     <ttl>1440</ttl>
     <image>
       <url>https://johnson1662.github.io/weather-model-rss/icon.png</url>
@@ -14,60 +14,53 @@
     </image>
 
     <item>
-      <title>第1天：Pangu-Weather架构总览 | 0基础入门</title>
+      <title>第1天：Pangu-Weather架构总览 | 零基础入门</title>
       <link>https://arxiv.org/abs/2211.02556</link>
       <guid>weather-learning-day1-2026-06-16</guid>
-      <pubDate>2026-06-16 20:00:00 +0800</pubDate>
+      <pubDate>2026-06-16 21:00:00 +0800</pubDate>
       <description><![CDATA[
-      <h2>今日主题：Pangu-Weather整体架构</h2>
-      <p>Pangu-Weather是华为云开发的全球气象预报模型，它用"3D Transformer"结构直接在气象再分析数据上做训练，不需要数值模式的传统物理方程求解过程。</p>
+      <h2>今日主题：Pangu-Weather 整体架构</h2>
+      <p>Pangu-Weather 是华为云开发的全球气象预报模型，它用"3D Transformer"结构直接在气象再分析数据上做训练，不需要数值模式求解大气动力学方程组。</p>
 
       <h3>一、这模型解决什么问题？</h3>
-      <p>传统数值天气预报（NWP）要在超级计算机上求解大气动力学方程组，算一个10天预报需要数小时到数天。Pangu-Weather把这件事变成了"端到端的神经网络推理"——输入当前时刻的大气状态，输出未来时刻的预测，一次推理只要几秒。</p>
+      <p>传统数值天气预报（NWP）必须在超级计算机上求解物理方程，一个10天预报要算数小时到数天。Pangu-Weather 把这件事变成了"端到端的神经网络推理"——输入当前大气状态，输出未来预测，一次推理只要几秒。</p>
 
-      <h3>二、3D Transformer是什么？</h3>
-      <p>普通图像 Transformer（如 ViT）处理的是 H×W 的2D图像，把图像切成固定大小的 patch，然后做 self-attention。<p>Pangu-Weather的输入是三维大气体积数据：经度（H）× 纬度（W）× 气压层（P）。数据形状大致是 [721, 1440, 5]（0.25°分辨率），包含5个高空变量等。</p>
+      <h3>二、3D Transformer 是什么？</h3>
+      <p>普通图像 Transformer（如 ViT）处理的是 H×W 的 2D 图像。Pangu-Weather 的输入是三维大气体积数据：经度（H）× 纬度（W）× 气压层（P），形状约 [721, 1440, 5]。</p>
       <p>它的做法：</p>
       <ul>
-        <li>把 3D 体积切成立体 patch（长×宽×高的小立方体）</li>
+        <li>把 3D 体积切成小立方体 patch</li>
         <li>用 3D 卷积做 patch embedding</li>
-        <li>在自注意力中同时关注上下层之间的关联（不只是平面上的空间关联）</li>
+        <li>在自注意力中同时关注上下层之间的关联</li>
       </ul>
       <p>参考论文：<a href="https://arxiv.org/abs/2211.02556">Pangu-Weather: A 3D High-Resolution Model for Fast and Accurate Global Weather Forecast</a></p>
 
       <h3>三、关键概念（大白话版）</h3>
-      <p><b>Patch Embedding：</b>把连续的大气数据"切块"，每个小块用线性层映射成向量。好比把一幅高分辨率地图切成很多小方格，每个方格提取一组特征。</p>
-      <p><b>4D位置编码：</b>不仅编码空间位置（在哪一行、哪一列、哪一气压层），还编码时间信息（今天是第几天），让模型知道每个数据点对应的时间。</p>
-      <p><b>3D窗口注意力：</b>在每个局部窗口内做自注意力，窗口是3D的立体窗口，而不是2D平面。这降低了计算复杂度，同时保留了垂直方向的物理关联。</p>
+      <p><b>Patch Embedding：</b>把连续的大气数据"切块"，每个小块用线性层映射成向量。好比把高分辨率地图切成很多小方格。</p>
+      <p><b>4D 位置编码：</b>不仅编码空间位置（在哪个经度、纬度、气压层），还编码时间信息（第几天），让模型知道数据对应的时间。</p>
+      <p><b>3D 窗口注意力：</b>在每个立体窗口内做自注意力，计算复杂度可控，同时保留了垂直方向物理关联。</p>
 
-      <h3>四、今日动手实验</h3>
-      <p><b>任务：</b>下载 Pangu-Weather 官方代码，跑一次前向传播，打印所有中间 tensor 的 shape。</p>
-      <p><b>步骤：</b></p>
+      <h3>四、今日实践</h3>
+      <p><b>任务：</b>下载官方代码，跑一次前向，打印所有 tensor shape。</p>
+      <p>步骤：</p>
       <ol>
         <li><code>git clone https://github.com/198808xc/Pangu-Weather</code></li>
-        <li>查看数据加载部分，理解输入张量的 shape 是什么</li>
-        <li>逐层打印 forward 过程中每个 attention block 的激活值 shape</li>
+        <li>查看数据加载部分，理解输入 tensor shape</li>
+        <li>逐层打印 forward 中每个 attention block 的激活值 shape</li>
         <li>关注 QKV 投影前后的维度变化</li>
       </ol>
 
-      <h3>五、学习自检</h3>
-      <p>读完本文后，你能回答吗：</p>
+      <h3>五、自检问题</h3>
       <ul>
-        <li>Pangu-Weather 的输入是几维数据？每个维度的物理含义是什么？</li>
-        <li>3D Attention 相比 2D Attention，计算量增加了多少？（数量级估计）</li>
+        <li>Pangu-Weather 的输入是几维数据？每个维度的物理含义？</li>
+        <li>3D Attention 相比 2D Attention 计算量增加多少（数量级）？</li>
         <li>Patch Embedding 在气象数据上如何实现？</li>
       </ul>
-      ]]></description>
-    </item>
 
-    <item>
-      <title>预告 | 明天内容：Transformer注意力机制与气象应用</title>
-      <link>https://johnson1662.github.io/weather-model-rss/</link>
-      <guid>weather-learning-preview-day2</guid>
-      <pubDate>2026-06-16 22:00:00 +0800</pubDate>
-      <description><![CDATA[
-      <p>明天将从零讲解 Attention 的计算过程（QKV 投影、注意力分数、加权求和），解释 RoPE 旋转位置编码在气象数据中的特殊处理方式，并推导 3D 窗口划分的 FLOPs 计算。</p>
-      <p>前置知识：会矩阵乘法即可，不需要任何 Transformer 基础。</p>
+      <hr/>
+      <h3>📅 明日预告：Transformer 注意力机制与气象应用</h3>
+      <p>明天从零讲解 Attention 的计算过程（QKV 投影、注意力分数、加权求和），解释 RoPE 旋转位置编码在气象数据中的特殊处理方式，推导 3D 窗口划分的 FLOPs。</p>
+      <p>前置知识：会矩阵乘法即可，不需要 Transformer 基础。</p>
       ]]></description>
     </item>
   </channel>
