@@ -3,64 +3,107 @@
   <channel>
     <title>气象大模型理论学习日报 | 先导杯备赛</title>
     <link>https://johnson1662.github.io/weather-model-rss/</link>
-    <description>围绕2026年先导杯"基于国产科学智算生态的气象大模型推理部署优化"赛题，每日推送一篇精讲文章，从零讲解模型压缩、加速、量化的核心知识。</description>
+    <description>围绕2026年先导杯"基于国产科学智算生态的气象大模型推理部署优化"赛题，每日推送一篇零基础精讲文章，覆盖模型压缩、量化、推理加速等理论知识。</description>
     <language>zh-CN</language>
-    <lastBuildDate>2026-06-16 21:00:00 +0800</lastBuildDate>
+    <lastBuildDate>2026-06-16 22:00:00 +0800</lastBuildDate>
     <ttl>1440</ttl>
-    <image>
-      <url>https://johnson1662.github.io/weather-model-rss/icon.png</url>
-      <title>气象大模型理论学习日报</title>
-      <link>https://johnson1662.github.io/weather-model-rss/</link>
-    </image>
 
     <item>
-      <title>第1天：Pangu-Weather架构总览 | 零基础入门</title>
+      <title>第1天：Pangu-Weather 架构总览 | 零基础入门</title>
       <link>https://arxiv.org/abs/2211.02556</link>
       <guid>weather-learning-day1-2026-06-16</guid>
-      <pubDate>2026-06-16 21:00:00 +0800</pubDate>
+      <pubDate>2026-06-16 22:00:00 +0800</pubDate>
       <description><![CDATA[
       <h2>今日主题：Pangu-Weather 整体架构</h2>
-      <p>Pangu-Weather 是华为云开发的全球气象预报模型，它用"3D Transformer"结构直接在气象再分析数据上做训练，不需要数值模式求解大气动力学方程组。</p>
+      <p>Pangu-Weather 是华为云在 2023 年（Nature 正刊）发表的全球气象预报模型。它用"3D Transformer"结构直接在气象再分析数据上训练，完全绕开了传统数值天气预报（NWP）求解偏微分方程的过程。</p>
 
-      <h3>一、这模型解决什么问题？</h3>
-      <p>传统数值天气预报（NWP）必须在超级计算机上求解物理方程，一个10天预报要算数小时到数天。Pangu-Weather 把这件事变成了"端到端的神经网络推理"——输入当前大气状态，输出未来预测，一次推理只要几秒。</p>
+      <h3>一、为什么需要气象大模型？</h3>
+      <p>传统 NWP 的流程是：收集观测 → 数据同化 → 求解大气运动方程组 → 输出预报，需要在超级计算机上运行数小时。</p>
+      <p>Pangu-Weather 把流程变成了端到端的深度学习问题：输入当前时刻的大气状态（t₀）→ 3D Transformer → 输出未来时刻的大气状态（t₀+Δt）。一次推理只需几十秒。</p>
 
-      <h3>二、3D Transformer 是什么？</h3>
-      <p>普通图像 Transformer（如 ViT）处理的是 H×W 的 2D 图像。Pangu-Weather 的输入是三维大气体积数据：经度（H）× 纬度（W）× 气压层（P），形状约 [721, 1440, 5]。</p>
-      <p>它的做法：</p>
+      <h3>二、3D Earth-Specific Transformer 的结构</h3>
+      <p>整体架构图（引用自 Pangu-Weather 论文 Fig.1 思路重绘）：</p>
+      <img src="https://johnson1662.github.io/weather-model-rss/diagrams/pangu-arch.svg" alt="Pangu-Weather 3D Transformer 架构图" style="max-width:100%;border:1px solid #ddd;border-radius:6px;margin:10px 0;"/>
+
+      <p><b>Step 1：输入数据</b></p>
+      <p>与标准 ViT 处理 2D 图像不同，Pangu-Weather 的输入是<strong>三维大气体积数据</strong>：</p>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">维度</th><th style="padding:6px;border:1px solid #90caf9;">大小</th><th style="padding:6px;border:1px solid #90caf9;">物理含义</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">H (经度)</td><td style="padding:5px;border:1px solid #e0e0e0;">721</td><td style="padding:5px;border:1px solid #e0e0e0;">0.25° 分辨率的经度网格数</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">W (纬度)</td><td style="padding:5px;border:1px solid #e0e0e0;">1440</td><td style="padding:5px;border:1px solid #e0e0e0;">0.25° 分辨率的纬度网格数</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">P (气压层)</td><td style="padding:5px;border:1px solid #e0e0e0;">4 / 13</td><td style="padding:5px;border:1px solid #e0e0e0;">地表变量4层，高空变量13层</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">C (变量)</td><td style="padding:5px;border:1px solid #e0e0e0;">5 / 1</td><td style="padding:5px;border:1px solid #e0e0e0;">高空5个变量（位势、温度、湿度等）</td></tr>
+      </table>
+
+      <p><b>Step 2：3D Patch Embedding</b></p>
+      <p>标准 ViT 把 2D 图像切成小块（patch），每个 patch 线性映射成 token。Pangu-Weather 在 H×W×P 三个方向同时切块：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+输入: [B, C, H, W, P]  # 5D 张量
+  ↓ 3D Conv (kernel=2×2×2, stride=2×2×2)
+  ↓ flatten + LayerNorm
+输出: [B, L, D]          # L = (H/2)×(W/2)×(P/2), D 为 token 维度
+      </pre>
+      <p>关键点：3D 卷积同时压缩了空间和垂直维度，既做了 embedding 又做了下采样。</p>
+
+      <p><b>Step 3→6：4 个 Stage 的层级结构</b></p>
+      <p>每个 Stage 包含若干 3D Transformer Block，Stage 之间通过 3D 下采样连接：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+输入图片 → PatchEmbed → [Stage1: 2块] → 下采样 → [Stage2: 2块] → 下采样 → [Stage3: 6块] → 下采样 → [Stage4: 6块] → 输出预测
+          (1/2×1/2)        (1/4×1/4)         (1/8×1/8)
+      </pre>
+      <p>Stage 越深，空间分辨率越低但通道数越多（类似 CNN 中 feature map 的变化规律）。Stage 3-4 各有 6 个 Block，是计算量的主要集中地。</p>
+
+      <h3>三、核心创新：3D 窗口注意力</h3>
+      <p>这是整篇论文最重要的设计。标准 Attention 的计算复杂度为 O(N²)，N 是 token 数。对于气象数据（N ≈ 721×1440×5 ≈ 520 万），直接做全局注意力是不可能的。</p>
+
+      <p><b>解决方案：</b>把 token 序列划分为 3D 窗口（例如 8×8×4 的小立体块），注意力<strong>只在窗口内部</strong>计算。这样做的好处：</p>
       <ul>
-        <li>把 3D 体积切成小立方体 patch</li>
-        <li>用 3D 卷积做 patch embedding</li>
-        <li>在自注意力中同时关注上下层之间的关联</li>
+        <li>复杂度从 O(N²) 降到 O(M × w³)，其中 M 是窗口数，w 是窗口大小</li>
+        <li>垂直方向的物理关联（不同气压层之间的耦合）被保留</li>
+        <li>可以通过 Window Shift 实现跨窗口信息交换（类似 Swin Transformer）</li>
       </ul>
-      <p>参考论文：<a href="https://arxiv.org/abs/2211.02556">Pangu-Weather: A 3D High-Resolution Model for Fast and Accurate Global Weather Forecast</a></p>
 
-      <h3>三、关键概念（大白话版）</h3>
-      <p><b>Patch Embedding：</b>把连续的大气数据"切块"，每个小块用线性层映射成向量。好比把高分辨率地图切成很多小方格。</p>
-      <p><b>4D 位置编码：</b>不仅编码空间位置（在哪个经度、纬度、气压层），还编码时间信息（第几天），让模型知道数据对应的时间。</p>
-      <p><b>3D 窗口注意力：</b>在每个立体窗口内做自注意力，计算复杂度可控，同时保留了垂直方向物理关联。</p>
+      <p><b>为什么不能用 2D 窗口？</b></p>
+      <p>气象数据中，不同气压层之间有强烈的物理耦合。例如，地形抬升效应会从地面（1000hPa）一直延伸到对流层顶（200hPa）。如果用 2D 窗口每层独立处理，这种垂直耦合就被切断了。</p>
 
-      <h3>四、今日实践</h3>
-      <p><b>任务：</b>下载官方代码，跑一次前向，打印所有 tensor shape。</p>
-      <p>步骤：</p>
-      <ol>
-        <li><code>git clone https://github.com/198808xc/Pangu-Weather</code></li>
-        <li>查看数据加载部分，理解输入 tensor shape</li>
-        <li>逐层打印 forward 中每个 attention block 的激活值 shape</li>
-        <li>关注 QKV 投影前后的维度变化</li>
-      </ol>
+      <h3>四、关键概念详解（大白话版）</h3>
 
-      <h3>五、自检问题</h3>
+      <p><b>1. Self-Attention（自注意力）</b></p>
+      <p>让每个 token"看"一眼序列里的其他 token，决定应该关注谁。</p>
+      <p>公式：Attention(Q,K,V) = softmax(QKᵀ/√d)V</p>
+      <p>通俗理解：Q 问"我是什么"、K 回答"我有这些特征"、V 给出"特征的值是多少"。QKᵀ 计算关注分数，softmax 归一化，加权求和得到新表示。</p>
+
+      <p><b>2. 4D 位置编码（4D Position Encoding）</b></p>
+      <p>普通 Transformer 用 1D 位置编码（token 序列索引）。Pangu-Weather 把位置编码分解为 4 个独立维度：</p>
       <ul>
-        <li>Pangu-Weather 的输入是几维数据？每个维度的物理含义？</li>
-        <li>3D Attention 相比 2D Attention 计算量增加多少（数量级）？</li>
-        <li>Patch Embedding 在气象数据上如何实现？</li>
+        <li>经度方向的位置编码（东西方向）</li>
+        <li>纬度方向的位置编码（南北方向）</li>
+        <li>气压层方向的位置编码（垂直方向）</li>
+        <li>时间步的位置编码（输入时序）</li>
+      </ul>
+
+      <p><b>3. 层级设计思想</b></p>
+      <p>Pangu-Weather 的 4-Stage 设计借鉴了 Swin Transformer 的多尺度思路：</p>
+      <ul>
+        <li>Stage 1：大窗口（8×8×4），捕获局部细节</li>
+        <li>Stage 2-3：中等窗口（4×4×2），捕获中尺度特征</li>
+        <li>Stage 4：全局感受野，捕获大尺度环流模式</li>
+      </ul>
+      <p>这种设计在计算效率和特征表达能力之间取得了很好的平衡。</p>
+
+      <h3>五、这个架构对比赛的启示</h3>
+      <p>后续所有压缩和加速操作的"锚点"：</p>
+      <ul>
+        <li><b>剪枝：</b>3D 窗口内的 Head 可以剪，但要注意窗口边界处的依赖关系不能随意剪</li>
+        <li><b>量化：</b>4 个 Stage 的激活值分布不同，Stage 1 较均匀，Stage 4 容易出现异常值</li>
+        <li><b>结构压缩：</b>Stage 3-4 的 12 个 Block 占了总计算量的 ~70%，是优化的主战场</li>
+        <li><b>推理加速：</b>3D 窗口注意力的计算模式非常适合算子融合</li>
       </ul>
 
       <hr/>
       <h3>📅 明日预告：Transformer 注意力机制与气象应用</h3>
-      <p>明天从零讲解 Attention 的计算过程（QKV 投影、注意力分数、加权求和），解释 RoPE 旋转位置编码在气象数据中的特殊处理方式，推导 3D 窗口划分的 FLOPs。</p>
-      <p>前置知识：会矩阵乘法即可，不需要 Transformer 基础。</p>
+      <p>明天从零讲解 Attention 的数学原理：QKV 的维度推导、注意力分数的计算过程、RoPE 旋转位置编码的公式推导、以及 3D 窗口注意力相比 2D 的额外 FLOPs 到底是多少。</p>
+      <p>前置知识：矩阵乘法即可。不需要任何 Transformer 基础。</p>
       ]]></description>
     </item>
   </channel>
