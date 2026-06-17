@@ -106,5 +106,102 @@
       <p>前置知识：矩阵乘法即可。不需要任何 Transformer 基础。</p>
       ]]></description>
     </item>
+    <item>
+      <title>第2天：Transformer 注意力机制与气象应用 | 零基础精讲</title>
+      <link>https://arxiv.org/abs/1706.03762</link>
+      <guid>weather-learning-day2-2026-06-17</guid>
+      <pubDate>2026-06-17 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+      <h2>今日主题：Transformer 注意力机制与气象应用</h2>
+      <p>从零开始拆解 <strong>Self-Attention</strong> 的数学过程：一个 5-token 的序列如何通过“查字典—算分数—加权混合”得到新表示。文中所有公式都用纯数学式子呈现，不跳过符号。</p>
+
+      <h3>一、从“小团队开会”理解 Attention</h3>
+      <p>想象有 5 个人围成一圈开会：<code>q1, q2, q3, q4, q5</code>。每个人都准备了两个身份证：<strong>Query（问题）</strong>和 <strong>Key（经历）</strong>。同时每个人身上还有一份 <strong>Value（实际贡献）</strong>。</p>
+      <p>开会规则：</p>
+      <ol>
+        <li>每个人先用 <strong>Query</strong> 和所有人的 <strong>Key</strong> 比相似度，得到一个“关注分数”。</li>
+        <li>所有人的分数做一次 softmax，归一化成权重（加起来 = 1）。</li>
+        <li>按权重把所有人的 <strong>Value</strong> 加权求和，得到自己的“发言稿”。</li>
+      </ol>
+      <p>最终，每个人手里的新内容都融合了其他人的信息。这就是 <strong>Self-Attention</strong> 的本质。</p>
+
+      <h3>二、数学公式拆解</h3>
+      <p>先看最核心的一次 Attention 计算过程。假设一个 token 的输出维度是 <code>d</code>，一个 batch 里有 <code>B</code> 个样本，序列长度为 <code>N</code>。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+投 影 阶 段：
+Q = X · W_Q,  K = X · W_K,  V = X · W_V
+其中 X ∈ [B, N, d]，W_Q ∈ [d, d]
+
+注 意 力 分 数 阶 段：
+Scores = Q · Kᵀ / √d_h
+Scores ∈ [B, h, N, N]
+
+加 权 求 和 阶 段：
+Attn = softmax(Scores)
+Output = Attn · V
+Output ∈ [B, N, d]
+      </pre>
+      <p><code>h</code> 是注意力头数，<code>d_h = d / h</code> 是每个头的内部维度。<code>√d_h</code> 的作用是防止 softmax 进入饱和区。</p>
+
+      <h3>三、核心概念大白话详解</h3>
+      <p><b>1. Self-Attention（自注意力）</b></p>
+      <p>让每个 token“看一眼”序列里其他 token，决定应该关注谁。直接做全序列的字典查找。</p>
+      <p><strong>比赛中的意义：</strong>气象模型全部推理时间中，Attention 占 70% 以上；任何压缩或加速操作都要优先处理它。</p>
+
+      <p><b>2. Query / Key / Value</b></p>
+      <ul>
+        <li><b>Query：</b>“我想找什么”</li>
+        <li><b>Key：</b>“我有什么信息”</li>
+        <li><b>Value：</b>“具体内容是什么，给我看”</li>
+      </ul>
+      <p>Q 和 K 都过同一个 <code>softmax</code>，只有 V 真正参与加权求和。</p>
+      <p><strong>比赛中的意义：</b>量化时 Q/K 对 extreme outliers 更敏感，V 的分布通常更平稳。很多量化方案会对 Q/K 做特殊保护。</p>
+
+      <p><b>3. √d_h 缩放因子</b></p>
+      <p>Q·Kᵀ 的方差随 d_h 增大而增大，softmax 会被压到极值（梯度接近 0）。<code>1/√d_h</code> 把方差拉回 1 左右。</p>
+      <p><strong>比赛中的意义：</strong>INT8 量化后这个缩放会被近似成整数倍，需要注意是否引入额外精度损失。</p>
+
+      <p><b>4. Multi-Head Attention（多头注意力）</b></p>
+      <p>把 d 拆成 h 个 d_h 维的小空间，每个头独立做 Attention，最后拼起来。等于“h 个专家同时看同一批数据各取所需”。</p>
+      <p><strong>比赛中的意义：</strong>剪枝时可以直接移除整个头，不会破坏计算图，是结构化剪枝的首选入口。</p>
+
+      <p><strong>5. RoPE 旋转位置编码</strong></p>
+      <p>普通位置编码给每个 token 一个固定的 index ID，不适合二维网格。RoPE 把 Q/K 的每一对维度看成一个二维向量，按位置旋转角度。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+| 项目 | 内容 |
+|------|------|
+| 每对维度 | (d_2i-1, d_2i) |
+| 基础角度 | θ_i = 10000^(-2i/d) |
+| 二维旋转 | [cos -sin; sin cos] · [q_2i-1; q_2i] |
+| 结果 |注意力分数自动变成“相对位置”的函数 |
+      </pre>
+      <p><strong>比赛中的意义：</strong>RoPE 使模型学到“相邻网格”的关系，而不是死记硬背某个绝对坐标，有助于模型在未见区域外推。</p>
+
+      <h3>四、直观流程图（5 token 示例）</h3>
+      <img src="https://johnson1662.github.io/weather-model-rss/diagrams/attention-mechanism.svg" alt="Self-Attention 5 token 计算演示" style="max-width:100%;border:1px solid #ddd;border-radius:6px;margin:10px 0;"/>
+
+      <h3>五、3D 窗口注意力的额外成本</h3>
+      <p>气象数据是 H×W×P 的三维网格。2D 窗口只切 H×W，3D 窗口继续在 P 方向切。额外成本很低：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+2D 窗口：O( g_h·g_w · (P·g_p)·(P·g_p) )
+3D 窗口：O( g_h·g_w·g_p · (P/g_p)·(P/g_p) )
+      </pre>
+      <p>3D 只比 2D 多乘一个 <code>g_p</code>，H/W 维度下的复杂度不变。<strong>但物理上保留了气压层之间的耦合。</strong></p>
+      <p><strong>比赛中的意义：</strong>国产推理引擎优化时，3D 窗口 Attention 会映射成“很多小 Gemm + 一次 gather”，比全局注意力更易做算子融合。</p>
+
+      <h3>六、常见误区</h3>
+      <ul>
+        <li><b>Attention 不是只有大模型才需要：</b>它是所有 Transformer 类模型的基石。</li>
+        <li><b>softmax 不是取最大值：</b>是把所有分数压到 (0,1) 区间并保持和为 1。</li>
+        <li><b>Q/K/V 不是共用同一个线性层：</b>每个都有独立的权重矩阵。</li>
+        <li><b>气象模型不需要 Mask：</b>单次前向预测，不存在“未来泄露”问题。</li>
+      </ul>
+
+      <hr/>
+      <h3>📅 明日预告：模型剪枝基础理论</h3>
+      <p>明天讲结构化剪枝 vs 非结构化剪枝、TorchPruning 的 Dependency Graph 如何解决 Residual 对齐，以及 Taylor 二阶重要性为什么比 L1 范数更准。</p>
+      <p>前置知识：会看矩阵乘法即可。不需要 PyTorch 基础。</p>
+      ]]></description>
+    </item>
   </channel>
 </rss>
