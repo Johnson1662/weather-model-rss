@@ -306,5 +306,86 @@ I_i ≈ 0.5 × (∂L/∂w_i)² × w_i²
       <p>前置知识：会看矩阵乘法即可。不需要线性代数基础。</p>
       ]]></description>
     </item>
+    <item>
+      <title>第5天：量化基础与激活值异常值 | 零基础精讲</title>
+      <link>https://arxiv.org/abs/2211.10438</link>
+      <guid>weather-learning-day5-2026-06-20</guid>
+      <pubDate>2026-06-20 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+      <h2>今日主题：量化基础与激活值异常值</h2>
+      <p>从零搞懂“为什么把大模型从浮点数压缩成 8 位整数会炸精度”，以及 SmoothQuant 如何<strong>数学等价</strong>地把“难量化”的激活值异常值平滑掉，换来真正的 INT8 全链路推理。</p>
+
+      <h3>一、量化到底在做什么？（一碗水端平的比喻）</h3>
+      <p>模型里的数和温度计读数一样：</p>
+      <ul>
+        <li><strong>浮点（FP16/FP32）</strong>：细粒度水银温度计，能读 36.8234°C，但贵、占空间、移动慢。</li>
+        <li><strong>整数（INT8）</strong>：普通体温枪，只能读到整数 37°C，便宜、快、省电。</li>
+      </ul>
+      <p>量化就是<strong>把细粒度温度计换成整数体温枪</strong>，并尽量不丢信息。</p>
+      <p>一碗水的等距刻度：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+比例因子 s = (max(x) - min(x)) / 127
+量化     x_q = round( x / s ) + z  （z 是零点偏移）
+反量化   x   = (x_q - z) * s
+      </pre>
+
+      <h3>二、对称 vs. 非对称量化</h3>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">类型</th><th style="padding:6px;border:1px solid #90caf9;">公式</th><th style="padding:6px;border:1px solid #90caf9;">适用场景</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">对称</td><td style="padding:5px;border:1px solid #e0e0e0;">x_q = round(x / s)</td><td style="padding:5px;border:1px solid #e0e0e0;">零均值分布，如权重</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">非对称</td><td style="padding:5px;border:1px solid #e0e0e0;">x_q = round(x / s) + z</td><td style="padding:5px;border:1px solid #e0e0e0;">存在偏移，如 Softmax 输出</td></tr>
+      </table>
+
+      <h3>三、为什么 Transformer 里有激活值异常值？</h3>
+      <p>正常数据分布像正态钟形曲线，极端值很少。但 Transformer 里会<strong>局部冒出一个特别大的数</strong>（比如 10-100 倍标准差之外）。</p>
+      <p>直觉：Softmax 对指数敏感，少数“超级活跃”的 token 会在某些通道上把数值“撑爆”。LLM 的“异常值”和气象模型不是同一个来源，但<strong>激活异常</strong>是 Transformer 类模型的通用特征。</p>
+      <p><strong>比赛中的意义：</strong>如果直接粗暴地将激活量化为 INT8 per-tensor，一个 outlier 就能吃掉大部分量程，其余正常值全被压成近似 0，精度直接崩溃。</p>
+
+      <h3>四、LLM.int8()：用 FP16 救急，但靠硬件缓存</h3>
+      <p>LLM.int8() 的思路：先把异常值找出来，丢给 FP16 处理，其余做 INT8。结果：准确，但 <strong>延迟掉不下来</strong>（来回转换开销），不适合推理引擎单一直道。</p>
+
+      <h3>五、SmoothQuant：把异常值“搬家”</h3>
+      <p>核心思想：<strong>激活难量化？那让权重难量化，激活就变简单了。</strong></p>
+      <p>数学上等价变换（注意：这不改模型输出，只是缩放）：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+Y = X · W
+
+= (X / s) · (s · W)
+
+令   X̂ = X * diag(s)^(-1)    （激活被平滑）
+    Ŵ  = diag(s) * W         （权重被放大）
+则   Y = X̂ · Ŵ
+      </pre>
+      <p>关键公式：每通道的迁移强度</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+s_j = (||X_j||^α) / (||W_j||^(1-α)),   j=1..C，α ∈ [0,1]
+α 越大：把更多异常值从激活搬到权重上
+典型值：α=0.5（平衡） 或 α=0.75（更激进的异常值平滑）
+      </pre>
+      <p><strong>比赛中的意义：</strong>SmoothQuant 是“离线做一次，线上纯 INT8”，不需要改推理引擎。适合先导杯的有限时间窗口。</p>
+
+      <h3>六、实战中看得到的差异（SmoothQuant 消融表）</h3>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">方法</th><th style="padding:6px;border:1px solid #90caf9;">精度损失</th><th style="padding:6px;border:1px solid #90caf9;">引擎兼容</th><th style="padding:6px;border:1px solid #90caf9;">离线算力</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">W8A8（暴力）</td><td style="padding:5px;border:1px solid #e0e0e0;">崩溃</td><td style="padding:5px;border:1px solid #90caf9;">是</td><td style="padding:5px;border:1px solid #e0e0e0;">0</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">LLM.int8()</td><td style="padding:5px;border:1px solid #e0e0e0;">几乎无损</td><td style="padding:5px;border:1px solid #e0e0e0;">否</td><td style="padding:5px;border:1px solid #e0e0e0;">0</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>SmoothQuant-O2</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">~0.1-0.3%</td><td style="padding:5px;border:1px solid #90caf9;">是</td><td style="padding:5px;border:1px solid #e0e0e0;">低（512句校准）</td></tr>
+      </table>
+
+      <h3>七、常见误区</h3>
+      <ul>
+        <li><b>INT8 一定比 FP16 快：</b>要看引擎是否原生支持 INT8 GEMM；否则反而不如 FP16 Tensor Core 吞吐高。</li>
+        <li><b>异常值只存在于 LLM：</b>CNN 里也有 channel outlier，但没 LLM 那么夸张；气象模型尚未公开结论，建议自己画直方图验证。</li>
+        <li><b>α 越大越好：</b>α 太大，权重被放大太多，反而会引入饱和。</li>
+        <li><b>s 需要每层学习：</b>不需要，s 是离线通过少量校准句算出来的标量，不需要训练。</li>
+      </ul>
+
+      <hr/>
+      <h3>📅 明日预告：ONNX 生态基础</h3>
+      <p>明天从零讲 ONNX 是什么、Opset 版本差异、动态 shape vs 静态 shape 在推理引擎里怎么发挥作用，以及 Pangu-Weather 导出 ONNX 的常见坑。</p>
+      <p>前置知识：会看 Python 字典即可。</p>
+      ]]></description>
+    </item>
+
   </channel>
 </rss>
