@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <linearGradient id="box1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e94560"/>
+      <stop offset="100%" style="stop-color:#c23152"/>
+    </linearGradient>
+    <linearGradient id="box2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8a633"/>
+      <stop offset="100%" style="stop-color:#d4891a"/>
+    </linearGradient>
+    <linearGradient id="box3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f3460"/>
+      <stop offset="100%" style="stop-color:#1a5276"/>
+    </linearGradient>
+    <linearGradient id="box4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#53d769"/>
+      <stop offset="100%" style="stop-color:#3ab54e"/>
+    </linearGradient>
+    <linearGradient id="box5" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#533483"/>
+      <stop offset="100%" style="stop-color:#3e2665"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#aaa"/>
+    </marker>
+  </defs>
+
+  <rect width="800" height="500" fill="url(#bg)" rx="12"/>
+
+  <text x="400" y="38" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">ONNX 生态体系全景图</text>
+
+  <!-- 第一阶段：训练框架 -->
+  <rect x="50" y="65" width="200" height="100" rx="10" fill="url(#box1)" filter="url(#shadow)"/>
+  <text x="150" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">🧪 训练框架</text>
+  <text x="150" y="120" text-anchor="middle" fill="#ffe0e0" font-size="11">PyTorch / TensorFlow</text>
+  <text x="150" y="137" text-anchor="middle" fill="#ffe0e0" font-size="11">PaddlePaddle / MXNet</text>
+
+  <!-- 箭头 -->
+  <line x1="250" y1="115" x2="310" y2="115" stroke="#aaa" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 转换步骤 -->
+  <text x="280" y="105" text-anchor="middle" fill="#aaa" font-size="10">torch.onnx.export()</text>
+
+  <!-- 第二阶段：ONNX 中间表示 -->
+  <rect x="320" y="65" width="200" height="100" rx="10" fill="url(#box2)" filter="url(#shadow)"/>
+  <text x="420" y="100" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">📄 ONNX 中间表示</text>
+  <text x="420" y="120" text-anchor="middle" fill="#fff5e0" font-size="11">.onnx 文件（Protobuf）</text>
+  <text x="420" y="137" text-anchor="middle" fill="#fff5e0" font-size="11">计算图 + 权重 + Metadata</text>
+
+  <!-- 箭头向下 -->
+  <line x1="420" y1="165" x2="420" y2="210" stroke="#aaa" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 图形优化 -->
+  <rect x="320" y="215" width="200" height="50" rx="8" fill="#2d2d44" stroke="#f8a633" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="420" y="238" text-anchor="middle" fill="#f8a633" font-size="12" font-weight="bold">⚡ 图优化（Graph Optimization）</text>
+  <text x="420" y="253" text-anchor="middle" fill="#aaa" font-size="10">算子融合 · 常量折叠 · 死代码消除</text>
+
+  <!-- 箭头向下分叉 -->
+  <line x1="420" y1="265" x2="420" y2="300" stroke="#aaa" stroke-width="2"/>
+  <line x1="180" y1="300" x2="660" y2="300" stroke="#aaa" stroke-width="2"/>
+
+  <line x1="180" y1="300" x2="180" y2="320" stroke="#aaa" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="420" y1="300" x2="420" y2="320" stroke="#aaa" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="660" y1="300" x2="660" y2="320" stroke="#aaa" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 第三阶段：推理引擎 -->
+  <rect x="80" y="325" width="200" height="100" rx="10" fill="url(#box3)" filter="url(#shadow)"/>
+  <text x="180" y="360" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">🚀 ONNX Runtime</text>
+  <text x="180" y="380" text-anchor="middle" fill="#b8d4f0" font-size="11">CPU · CUDA · TensorRT</text>
+  <text x="180" y="397" text-anchor="middle" fill="#b8d4f0" font-size="11">DirectML · OpenVINO</text>
+
+  <rect x="320" y="325" width="200" height="100" rx="10" fill="url(#box4)" filter="url(#shadow)"/>
+  <text x="420" y="360" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">🔄 TensorRT</text>
+  <text x="420" y="380" text-anchor="middle" fill="#d0f0d0" font-size="11">NVIDIA GPU 专用优化</text>
+  <text x="420" y="397" text-anchor="middle" fill="#d0f0d0" font-size="11">FP16 / INT8 精度优化</text>
+
+  <rect x="560" y="325" width="200" height="100" rx="10" fill="url(#box5)" filter="url(#shadow)"/>
+  <text x="660" y="360" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">🧩 国产引擎</text>
+  <text x="660" y="380" text-anchor="middle" fill="#dcc8f0" font-size="11">DTK · 昇腾 CANN</text>
+  <text x="660" y="397" text-anchor="middle" fill="#dcc8f0" font-size="11">寒武纪 · 地平线</text>
+
+  <!-- 底部注释 -->
+  <text x="150" y="465" text-anchor="middle" fill="#666" font-size="10">不同训练框架 → 统一 ONNX 表示 → 任意推理引擎</text>
+  <text x="420" y="485" text-anchor="middle" fill="#444" font-size="9">"Train Anywhere, Deploy Everywhere"</text>
+</svg>

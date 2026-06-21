@@ -5,7 +5,7 @@
     <link>https://johnson1662.github.io/weather-model-rss/</link>
     <description>围绕2026年先导杯"基于国产科学智算生态的气象大模型推理部署优化"赛题，每日推送一篇零基础精讲文章，覆盖模型压缩、量化、推理加速等理论知识。</description>
     <language>zh-CN</language>
-    <lastBuildDate>2026-06-16 22:00:00 +0800</lastBuildDate>
+    <lastBuildDate>2026-06-20 22:00:00 +0800</lastBuildDate>
     <ttl>1440</ttl>
 
     <item>
@@ -112,9 +112,9 @@ Output = Attn · V
 
       <p><b>2. Query / Key / Value</b></p>
       <ul>
-        <li><strong>Query：</strong>“我想找什么”</li>
-        <li><strong>Key：</strong>“我有什么信息”</li>
-        <li><strong>Value：</strong>“具体内容是什么，给我看”</li>
+        <li><strong>Query：</strong>"我想找什么"</li>
+        <li><strong>Key：</strong>"我有什么信息"</li>
+        <li><strong>Value：</strong>"具体内容是什么，给我看"</li>
       </ul>
       <p><strong>比赛中的意义：</strong>量化时 Q/K 对 extreme outliers 更敏感，V 的分布通常更平稳。</p>
 
@@ -134,7 +134,7 @@ Output = Attn · V
 | 每对维度 | (d_2i-1, d_2i) |
 | 基础角度 | θ_i = 10000^(-2i/d) |
 | 二维旋转 | [cos -sin; sin cos] · [q_2i-1; q_2i] |
-| 结果 | 注意力分数自动变成“相对位置”的函数 |
+| 结果 | 注意力分数自动变成"相对位置"的函数 |
       </pre>
       <p><strong>比赛中的意义：</strong>RoPE 让模型学到"相邻网格"的关系，有助于未见区域外推。</p>
 
@@ -313,7 +313,7 @@ I_i ≈ 0.5 × (∂L/∂w_i)² × w_i²
       <pubDate>2026-06-20 22:00:00 +0800</pubDate>
       <description><![CDATA[
       <h2>今日主题：量化基础与激活值异常值</h2>
-      <p>从零搞懂“为什么把大模型从浮点数压缩成 8 位整数会炸精度”，以及 SmoothQuant 如何<strong>数学等价</strong>地把“难量化”的激活值异常值平滑掉，换来真正的 INT8 全链路推理。</p>
+      <p>从零搞懂"为什么把大模型从浮点数压缩成 8 位整数会炸精度"，以及 SmoothQuant 如何<strong>数学等价</strong>地把"难量化"的激活值异常值平滑掉，换来真正的 INT8 全链路推理。</p>
 
       <h3>一、量化到底在做什么？（一碗水端平的比喻）</h3>
       <p>模型里的数和温度计读数一样：</p>
@@ -338,13 +338,13 @@ I_i ≈ 0.5 × (∂L/∂w_i)² × w_i²
 
       <h3>三、为什么 Transformer 里有激活值异常值？</h3>
       <p>正常数据分布像正态钟形曲线，极端值很少。但 Transformer 里会<strong>局部冒出一个特别大的数</strong>（比如 10-100 倍标准差之外）。</p>
-      <p>直觉：Softmax 对指数敏感，少数“超级活跃”的 token 会在某些通道上把数值“撑爆”。LLM 的“异常值”和气象模型不是同一个来源，但<strong>激活异常</strong>是 Transformer 类模型的通用特征。</p>
+      <p>直觉：Softmax 对指数敏感，少数"超级活跃"的 token 会在某些通道上把数值"撑爆"。LLM 的"异常值"和气象模型不是同一个来源，但<strong>激活异常</strong>是 Transformer 类模型的通用特征。</p>
       <p><strong>比赛中的意义：</strong>如果直接粗暴地将激活量化为 INT8 per-tensor，一个 outlier 就能吃掉大部分量程，其余正常值全被压成近似 0，精度直接崩溃。</p>
 
       <h3>四、LLM.int8()：用 FP16 救急，但靠硬件缓存</h3>
       <p>LLM.int8() 的思路：先把异常值找出来，丢给 FP16 处理，其余做 INT8。结果：准确，但 <strong>延迟掉不下来</strong>（来回转换开销），不适合推理引擎单一直道。</p>
 
-      <h3>五、SmoothQuant：把异常值“搬家”</h3>
+      <h3>五、SmoothQuant：把异常值"搬家"</h3>
       <p>核心思想：<strong>激活难量化？那让权重难量化，激活就变简单了。</strong></p>
       <p>数学上等价变换（注意：这不改模型输出，只是缩放）：</p>
       <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
@@ -362,7 +362,7 @@ s_j = (||X_j||^α) / (||W_j||^(1-α)),   j=1..C，α ∈ [0,1]
 α 越大：把更多异常值从激活搬到权重上
 典型值：α=0.5（平衡） 或 α=0.75（更激进的异常值平滑）
       </pre>
-      <p><strong>比赛中的意义：</strong>SmoothQuant 是“离线做一次，线上纯 INT8”，不需要改推理引擎。适合先导杯的有限时间窗口。</p>
+      <p><strong>比赛中的意义：</strong>SmoothQuant 是"离线做一次，线上纯 INT8"，不需要改推理引擎。适合先导杯的有限时间窗口。</p>
 
       <h3>六、实战中看得到的差异（SmoothQuant 消融表）</h3>
       <table style="border-collapse:collapse;width:100%;margin:8px 0;">
@@ -384,6 +384,207 @@ s_j = (||X_j||^α) / (||W_j||^(1-α)),   j=1..C，α ∈ [0,1]
       <h3>📅 明日预告：ONNX 生态基础</h3>
       <p>明天从零讲 ONNX 是什么、Opset 版本差异、动态 shape vs 静态 shape 在推理引擎里怎么发挥作用，以及 Pangu-Weather 导出 ONNX 的常见坑。</p>
       <p>前置知识：会看 Python 字典即可。</p>
+      ]]></description>
+    </item>
+
+    <item>
+      <title>第6天：ONNX 生态基础 | 零基础精讲</title>
+      <link>https://onnx.ai/</link>
+      <guid>weather-learning-day6-2026-06-21</guid>
+      <pubDate>2026-06-21 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+      <h2>今日主题：ONNX 生态基础</h2>
+      <p>从零讲明白三个问题：ONNX 是什么、为什么需要它、气象模型部署中它扮演什么角色。本篇文章不需要任何模型部署经验。</p>
+
+      <h3>一、ONNX 是什么？一个"通用翻译器"</h3>
+      <p>想象你正在用 Excel 做表格，但你的同事用的是 WPS 表格。这两个软件的文件格式不同，直接互换会乱码。<strong>中间标准格式（比如 CSV）</strong> 可以让双方互通。</p>
+      <p>ONNX（Open Neural Network Exchange，开放神经网络交换格式）就是深度学习界的"CSV"。</p>
+      <ul>
+        <li><strong>训练框架</strong>有很多：PyTorch、TensorFlow、PaddlePaddle……各有一套文件格式。</li>
+        <li><strong>推理引擎</strong>也有很多：ONNX Runtime、TensorRT、OpenVINO、国产 DTK……它们不能直接读 PyTorch 的 .pth 文件。</li>
+        <li><strong>解决方案：</strong>先把 PyTorch 模型转成 ONNX 格式（.onnx 文件），然后推理引擎都能读这个统一格式。</li>
+      </ul>
+      <p style="text-align:center;"><strong>用一个公式总结：</strong></p>
+      <pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:14px;text-align:center;">
+PyTorch  →  ONNX （中间语言） → 任意推理引擎
+      </pre>
+      <p><strong>比赛中的意义：</strong>先导杯要求你优化模型后在国产推理引擎上跑推理。你不可能把 PyTorch 直接部署到国产卡上——必须先走 ONNX 这座"桥梁"。</p>
+
+      <h3>二、ONNX 文件里到底装了什么？</h3>
+      <p>.onnx 文件就是一个"蓝本 + 说明书 + 零件箱"的三位一体：</p>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">组成部分</th><th style="padding:6px;border:1px solid #90caf9;">内容</th><th style="padding:6px;border:1px solid #90caf9;">类比</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>计算图（Graph）</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">算子节点 + 数据边，描述计算流程</td><td style="padding:5px;border:1px solid #e0e0e0;">建筑蓝图</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>权重值（Weights）</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">所有 Layer 的数值参数</td><td style="padding:5px;border:1px solid #e0e0e0;">预装好的零件</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>元数据（Metadata）</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">OpSet 版本、模型版本、作者等</td><td style="padding:5px;border:1px solid #e0e0e0;">说明书</td></tr>
+      </table>
+      <p>整个文件用 <strong>Protobuf</strong> 序列化——你可以理解成"极高效打包"，让文件小、加载快。</p>
+
+      <p>来看一个简单模型的 ONNX 计算图示意（只有 1 个 ReLU 激活层）：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+输入: "input" (shape=[1,3,224,224], dtype=float32)
+  ↓
+节点: "Relu" (op_type="Relu")
+  ↓
+输出: "output" (shape=[1,1000], dtype=float32)
+      </pre>
+      <p>你不需要自己手写这个——PyTorch 的 <code>torch.onnx.export()</code> 会自动追踪你的模型，生成这个图。</p>
+
+      <h3>三、整体生态：一张图看全</h3>
+      <p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/onnx-ecosystem.svg" alt="ONNX 生态体系全景图" style="max-width:100%;border-radius:8px;"/></p>
+      <p>这张图展示了一条完整的部署流水线：不同的训练框架 → 统一的 ONNX 中间表示 → <strong>图优化</strong>（算子融合、常量折叠）→ 各种推理引擎（CPU/CUDA/TensorRT/国产引擎）。这就是"一次训练，到处部署"的真正含义。</p>
+
+      <h3>四、OpSet 版本是什么？为什么有版本号？</h3>
+      <p>ONNX 定义了一套标准"算子"（操作符），比如 Conv（卷积）、Relu、MatMul（矩阵乘法）、Softmax 等。每个算子有一个版本历史。</p>
+      <p>OpSet（算子集版本）就是<strong>所有这些算子版本的集合</strong>。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+| OpSet 版本 | 关键变化 | 对气象模型的意义 |
+|-----------|---------|-----------------|
+| ≤ 10 | 基础算子（Conv、Relu、MatMul） | 太老，无 bicubic 等高级算子 |
+| 11 | 加入 Resize/bicubic、ScatterND、TopK | SRCNN 超分辨率必备 |
+| 12 | ReduceOps 规范化、Constant 增强 | 兼容性改进 |
+| 13 | Softmax 更新、Axis 参数标准化 | 减少算子变体 |
+| 14 | 加入 GRU/LSTM 变体、Split 微调 | 不常用 |
+| 15 | 加入 <strong>LayerNormalization</strong> | ⭐ Pangu-Weather 的 LayerNorm 需要此版本 |
+| 16 | Loop 增强、If/Then 改进 | 可选 |
+| 17+ | 更多高级算子（GridSample、EmbedLayerNormalization） | 新模型可能依赖 |
+      </pre>
+      <p><strong>关键结论：</strong></p>
+      <ul>
+        <li>Pangu-Weather 的 LayerNorm 在 OpSet 15 标准版本中才有显式算子。如果你的导出版本太低，PyTorch 要么报错，要么把一个 LayerNorm 拆成几十个 Add/Mul/Sqrt 小算子——<strong>完全无法融合</strong>，推理速度极慢。</li>
+        <li><strong>建议：</strong>对 Pangu-Weather，<code>opset_version=15</code> 是最低要求，推荐用 <code>opset_version=17</code> 更安全。</li>
+      </ul>
+      <p><strong>比赛中的意义：</strong>导出时 opset 低于 15，LayerNorm 会被拆碎，国产推理引擎可能无法自动融合。导出时报个错调版本是最快的坑。</p>
+
+      <h3>五、动态 Shape vs 静态 Shape：推理引擎为什么"挑食"？</h3>
+
+      <p><b>静态 Shape（Static Shape）</b></p>
+      <p>导出时输入和输出的每个维度大小是固定的。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+输入 shape: [1, 5, 721, 1440, 4]   ←  batch=1，完全固定
+      </pre>
+      <ul>
+        <li><strong>优势：</strong>推理引擎可以提前做内存布局优化、算子融合、Kernel 静态编译——跳得很准。</li>
+        <li><strong>劣势：</strong>换一个 batch size 或不同分辨率，就必须重新导出。</li>
+      </ul>
+
+      <p><b>动态 Shape（Dynamic Shape）</b></p>
+      <p>某些维度（通常是 batch size）在运行时才确定。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+输入 shape: [dynamic_batch, 5, 721, 1440, 4]
+       ↑ 这个维度可变
+      </pre>
+      <ul>
+        <li><strong>优势：</strong>灵活，同一版 ONNX 可以处理不同 batch size。</li>
+        <li><strong>劣势：</strong>推理引擎无法提前做深度优化。每次运行都要动态分配内存、动态选 kernel，性能损失 ~10-30%。</li>
+      </ul>
+
+      <p><strong>比赛中的意义：</strong></p>
+      <ul>
+        <li>先导杯评测量 <strong>Latency（单次推理延迟）</strong>，固定输入 shape 是最优选择。</li>
+        <li>用 <code>dynamic_axes</code> 让 batch_size 动态很诱人，但会牺牲推理速度。</li>
+        <li><strong>推荐做法：</strong>导出时固定 batch=1（单样本推理），后续裁剪优化后如果发现能扩 batch，再单独导出静态 shape 的新 ONNX。</li>
+      </ul>
+
+      <p>PyTorch 导出时的动态/静态设定：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+# 完全静态（推荐比赛用）
+torch.onnx.export(model, dummy_input, "model.onnx",
+    opset_version=15,
+    input_names=['input'],
+    output_names=['output']
+)
+
+# 带动态 batch（灵活但慢）
+torch.onnx.export(model, dummy_input, "model.onnx",
+    opset_version=15,
+    input_names=['input'],
+    output_names=['output'],
+    dynamic_axes={
+        'input':  {0: 'batch_size'},   # 第一维可变
+        'output': {0: 'batch_size'}
+    }
+)
+      </pre>
+
+      <h3>六、torch.onnx.export() 关键参数详解</h3>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">参数</th><th style="padding:6px;border:1px solid #90caf9;">作用</th><th style="padding:6px;border:1px solid #90caf9;">推荐设置（比赛）</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">model</td><td style="padding:5px;border:1px solid #e0e0e0;">要导出的模型</td><td style="padding:5px;border:1px solid #e0e0e0;">必须 <code>model.eval()</code> 后再传</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">args</td><td style="padding:5px;border:1px solid #e0e0e0;">示例输入（用于追踪计算图）</td><td style="padding:5px;border:1px solid #e0e0e0;">torch.randn(1,5,721,1440,4)</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">f</td><td style="padding:5px;border:1px solid #e0e0e0;">输出文件名</td><td style="padding:5px;border:1px solid #e0e0e0;">"pangu_weather.onnx"</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">opset_version</td><td style="padding:5px;border:1px solid #e0e0e0;">算子集版本</td><td style="padding:5px;border:1px solid #e0e0e0;"><strong>15 或更高</strong>（LayerNorm 支持）</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">input_names</td><td style="padding:5px;border:1px solid #e0e0e0;">输入张量的名字</td><td style="padding:5px;border:1px solid #e0e0e0;">['input']（后面推理时用这个名字）</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">output_names</td><td style="padding:5px;border:1px solid #e0e0e0;">输出张量的名字</td><td style="padding:5px;border:1px solid #e0e0e0;">['output']</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">dynamic_axes</td><td style="padding:5px;border:1px solid #e0e0e0;">声明哪些维度可变</td><td style="padding:5px;border:1px solid #e0e0e0;">不设（固定 shape 加速）</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">do_constant_folding</td><td style="padding:5px;border:1px solid #e0e0e0;">常量折叠优化</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>True</code>（默认，加速）</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">export_params</td><td style="padding:5px;border:1px solid #e0e0e0;">是否保存权重</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>True</code>（必须）</td></tr>
+      </table>
+
+      <p><strong>一个关键的注意点：model.eval()</strong></p>
+      <p>导出前必须调用 <code>model.eval()</code>。否则模型里的 Dropout 和 BatchNorm 处于"训练模式"，导出的 ONNX 中 Dropout 可能还在随机丢弃数据——推理时结果完全不一样。</p>
+
+      <h3>七、ONNX Runtime：组装好蓝图就开始盖楼</h3>
+      <p>ONNX Runtime（ORT）是微软开发的跨平台推理引擎。它读取 ONNX 文件，做以下几件事：</p>
+      <ol>
+        <li><strong>图优化（Graph Optimization）</strong>：自动融合算子、消除冗余节点、折叠常量——不需要手动做。</li>
+        <li><strong>选择合适的 Execution Provider</strong>：CPU、CUDA、TensorRT、DirectML、OpenVINO……ORT 自动调度到可用的硬件后端。</li>
+        <li><strong>执行推理：</strong>输入数据 → 前向计算 → 输出预测结果。</li>
+      </ol>
+
+      <p>ORT 的图优化包括三个级别：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+级别 | 优化内容                  | 是否安全
+------|---------------------------|----------
+Basic | 常量折叠、Identity 消除     | ✅ 绝对安全
+Extended| 算子融合（如 Conv+BN→Conv）| ✅ 大部分安全
+Layout | 转置优化、NHWC 转换        | ⚠ 某些模型可能精度微差
+      </pre>
+      <p><strong>比赛中的意义：</strong>先用 ONNX Runtime (CPU) 验证导出的 ONNX 是否正确（参考精度对不对），再用国产推理引擎做高性能优化。ORT 是调试 ONNX 的"黄金标准"。</p>
+
+      <h3>八、Pangu-Weather 导出 ONNX 的四大常见坑</h3>
+
+      <p><b>🔴 坑1：LayerNorm 的 OpSet 版本</b></p>
+      <p>前面已经强调过：opset_version < 15 会导致 LayerNorm 被拆分成一堆 Add、Mul、Sub、Div、Sqrt。展开后约 15-20 个算子，推理引擎很难自动合并回去。</p>
+      <p><strong>对策：</strong>设置 opset_version=15 或 17。</p>
+
+      <p><b>🔴 坑2：动态 Shape 导致推理引擎不可优化</b></p>
+      <p>如果 H 和 W 的维度设成 dynamic，推理引擎的 Kernel 编译器（如 TensorRT）无法预先分配内存和选择最优 kernel。</p>
+      <p><strong>对策：</strong>固定所有非 batch 维度。先导杯评测输入大小固定，没必要用动态。</p>
+
+      <p><b>🔴 坑3：torch.split 和 torch.cat 的输出难以融合</b></p>
+      <p>PyTorch 中常用的 <code>torch.split</code> 和 <code>torch.cat</code> 在 ONNX 中会变成多个 Split/Cat 节点，通常成为融合的障碍。</p>
+      <p><strong>对策：</strong>尽量用 View/Reshape 替代 Split/Cat，或导出后手动用 onnxsim 优化。</p>
+
+      <p><b>🔴 坑4：3D 窗口 Attention 的 Gather 操作</b></p>
+      <p>Pangu-Weather 的 3D 窗口滑动在 ONNX 里会映射成 Gather + Reshape + Transpose 的复杂组合。如果不做图优化，这部分会成为推理瓶颈。</p>
+      <p><strong>对策：</strong>导出后先用 onnxsim 简化，再用 Netron（ONNX 可视化工具）查看计算图，确认 Gather 数量是否合理。</p>
+
+      <h3>九、核心概念速查表</h3>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">概念</th><th style="padding:6px;border:1px solid #90caf9;">一句话</th><th style="padding:6px;border:1px solid #90caf9;">比赛中的意义</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX</td><td style="padding:5px;border:1px solid #e0e0e0;">深度学习框架的"通用语言"</td><td style="padding:5px;border:1px solid #e0e0e0;">PyTorch → 国产引擎的必经桥梁</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">OpSet 版本</td><td style="padding:5px;border:1px solid #e0e0e0;">算子标准的版本号</td><td style="padding:5px;border:1px solid #e0e0e0;">≥ 15 才能正常导出 LayerNorm</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">静态 Shape</td><td style="padding:5px;border:1px solid #e0e0e0;">所有维度固定</td><td style="padding:5px;border:1px solid #e0e0e0;">更快，比赛推荐</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">动态 Shape</td><td style="padding:5px;border:1px solid #e0e0e0;">某些维度运行时决定</td><td style="padding:5px;border:1px solid #e0e0e0;">灵活但慢 10-30%</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime</td><td style="padding:5px;border:1px solid #e0e0e0;">跨平台推理引擎</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX 验证的黄金标准</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">图优化</td><td style="padding:5px;border:1px solid #e0e0e0;">算子融合、常量折叠</td><td style="padding:5px;border:1px solid #e0e0e0;">自动加速，减少推理时间</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Netron</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX 可视化工具</td><td style="padding:5px;border:1px solid #e0e0e0;">调试导出问题的第一步</td></tr>
+      </table>
+
+      <h3>十、常见误区</h3>
+      <ul>
+        <li><b>ONNX 自己会做加速：</b>ONNX 只是文件格式。加速是 ONNX Runtime 等推理引擎做的。</li>
+        <li><b>OpSet 越高越好：</b>不一定。某些老牌国产引擎可能不支持最新的 OpSet。建议用 15-17 范围测试。</li>
+        <li><b>onnxsim 什么都能优化：</b>onnxsim 主要做常量折叠和 Identity 消除，不做 LayerNorm 融合。</li>
+        <li><b>ONNX 只能在 GPU 上跑：</b>ONNX Runtime 支持 CPU、CUDA、TensorRT、DirectML、OpenVINO、CoreML 等。国产 DTK 也可能覆盖 ONNX EP。</li>
+        <li><b>导出 ONNX 需要改模型代码：</b>大多数情况下不需要。torch.onnx.export() 自动追踪计算图。</li>
+      </ul>
+
+      <hr/>
+      <h3>📅 明日预告（第7天）：ONNX 计算图优化</h3>
+      <p>明天讲算子融合的原理（为什么 Mul+Add 可以合并为 Gemm？），onnxsim 的具体优化策略（常量折叠、Identity 消除、Dead Code Elimination），以及 Pangu-Weather LayerNorm 的拆分与手动融合实践。</p>
+      <p>前置知识：理解 ONNX 计算图的基本结构（即今天的内容）。</p>
       ]]></description>
     </item>
 
