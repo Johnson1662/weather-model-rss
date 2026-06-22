@@ -5,7 +5,7 @@
     <link>https://johnson1662.github.io/weather-model-rss/</link>
     <description>围绕2026年先导杯"基于国产科学智算生态的气象大模型推理部署优化"赛题，每日推送一篇零基础精讲文章，覆盖模型压缩、量化、推理加速等理论知识。</description>
     <language>zh-CN</language>
-    <lastBuildDate>2026-06-20 22:00:00 +0800</lastBuildDate>
+    <lastBuildDate>2026-06-22 22:00:00 +0800</lastBuildDate>
     <ttl>1440</ttl>
 
     <item>
@@ -585,6 +585,253 @@ Layout | 转置优化、NHWC 转换        | ⚠ 某些模型可能精度微差
       <h3>📅 明日预告（第7天）：ONNX 计算图优化</h3>
       <p>明天讲算子融合的原理（为什么 Mul+Add 可以合并为 Gemm？），onnxsim 的具体优化策略（常量折叠、Identity 消除、Dead Code Elimination），以及 Pangu-Weather LayerNorm 的拆分与手动融合实践。</p>
       <p>前置知识：理解 ONNX 计算图的基本结构（即今天的内容）。</p>
+      ]]></description>
+    </item>
+
+    <item>
+      <title>第7天：ONNX 计算图优化 | 零基础精讲</title>
+      <link>https://onnxruntime.ai/docs/performance/model-optimizations/graph-optimizations.html</link>
+      <guid>weather-learning-day7-2026-06-22</guid>
+      <pubDate>2026-06-22 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+      <h2>今日主题：ONNX 计算图优化</h2>
+      <p>昨天的文章介绍了 ONNX 的基本概念——它是模型从 PyTorch 到推理引擎的"通用桥梁"。今天我们要深入这座桥梁上<strong>最重要的改造工程</strong>：计算图优化。简单说就是<strong>把笨重的原始模型变轻巧</strong>，让推理跑得更快。</p>
+
+      <p>这篇文章不需要任何编译器知识。我们从"一张图"开始讲起。</p>
+
+      <h3>一、什么是计算图？为什么需要优化？</h3>
+      <p><strong>计算图（Computation Graph）</strong>：把模型的每一笔计算画成一张网。节点是"计算步骤"（如乘法、加法、取最大值），边是"数据流动"（前一步的结果传给下一步）。</p>
+
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+原始 PyTorch 模型：
+  y = relu( matmul(x, W) + b )
+
+转成 ONNX 计算图后：
+  # 节点1: MatMul     输入: x, W  → 输出: temp1
+  # 节点2: Add        输入: temp1, b  → 输出: temp2
+  # 节点3: Relu       输入: temp2  → 输出: y
+      </pre>
+
+      <p>这三个节点就是三个<strong>独立的小步骤</strong>。在 GPU 上执行时，每个步骤都需要：</p>
+      <ol>
+        <li>启动一次 Kernel（GPU 上的计算函数）—— 启动一次消耗约 3-10 微秒</li>
+        <li>把中间结果（temp1, temp2）写到显存 —— 显存读写带宽有限，浪费时间</li>
+        <li>再读回来给下一步用 —— 白白增加延迟</li>
+      </ol>
+
+      <p><strong>比赛中的意义：</strong>Pangu-Weather 的一个完整前向推理包含数万个这样的节点。节点越多，Kernel Launch 和显存读写的开销就越大。计算图优化的核心目标就是<strong>减少节点数</strong>。</p>
+
+      <hr/>
+      <h3>二、算子融合：把三个小步骤合并成一步</h3>
+
+      <p>前三天的学习里我们已经接触过很多操作了：矩阵乘法（MatMul）、加法（Add）、激活函数（Relu）。如果这三个操作紧挨着出现，能不能<strong>合并成一个</strong>？</p>
+
+      <p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/operator-fusion.svg" alt="算子融合原理示意图" style="max-width:100%;border-radius:8px;"/></p>
+
+      <p>这张图展示了核心原理：左边是三个独立的 Kernel（Mul → Add → Relu），每步都要启动一次 GPU 函数并把中间结果写回显存。右边用<strong>一个 Fusion Kernel</strong> 完成全部计算，中间结果存在 GPU 的寄存器（最快的存储）里，不需要写显存。</p>
+
+      <p><b>为什么 Mul+Add 可以融合为 GEMM？</b></p>
+      <p>GEMM 是"General Matrix Multiply"（通用矩阵乘法）的缩写。数学上：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+原始公式：y = relu( matmul(x, W) + b )
+
+数学等价变换：
+  matmul(x, W) → 得到中间矩阵 M
+  M + b        → 广播加法
+  relu(M + b)  → 逐元素取最大值
+
+融合后：y = relu( (x × W) + b )
+等价于一个操作：Y = max(0, xW + b)
+      </pre>
+      <p>矩阵乘法本身就是将权重 W 和输入 x 的每一行做乘加累加。而加法 b 只是按行再加一个偏置，Relu 只是把负数变成 0。这三个操作<strong>共享同一个循环结构</strong>——都是在遍历矩阵的每个元素做运算。编译器可以把它们<strong>打包进同一个循环</strong>，一次遍历就做完三件事。</p>
+
+      <p>这叫"循环融合"（Loop Fusion）——把三个循环合并成一个。</p>
+
+      <p><strong>比赛中的意义：</strong>Pangu-Weather 的每个 Transformer Block 里，典型的可融合模式包括：</p>
+      <ul>
+        <li><b>QKV 投影+偏置</b>：3 次 MatMul + 3 次 Add → 可融合为 3 个 GEMM</li>
+        <li><b>Attention 输出投影+偏置</b>：MatMul + Add → 融合为 GEMM</li>
+        <li><b>MLP 全连接+激活</b>：MatMul + Add + GELU → 可融合为一个算子</li>
+        <li><b>LayerNorm</b>：ReduceMean + Sub + Pow + Mean + Add + Sqrt + Div + Mul + Add → 可融合为一整个 LayerNorm Kernel</li>
+      </ul>
+
+      <hr/>
+      <h3>三、onnxsim 的三把刀</h3>
+
+      <p>onnxsim（ONNX Simplifier，也叫 onnx-simplifier）是大家最常用的 ONNX 图优化工具。它在导出 ONNX 之后运行，做三件核心的事：</p>
+
+      <p><b>1. 常量折叠（Constant Folding）</b></p>
+      <p>模型里有些计算只依赖常量，不依赖输入。比如：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+# 优化前：每次推理都重复计算
+ones = [1.0, 1.0, 1.0, ...]  (一个全 1 张量)
+scale_factor = ones * (1.0 / sqrt(768.0))  ← 每次推理都算一遍除法
+  
+# 优化后：只算一次，把结果写死进 ONNX
+scale_factor = [0.036, 0.036, 0.036, ...]  ← 直接存成常量
+      </pre>
+      <p><strong>直觉类比：</strong>你每天出门前算一遍"今天星期几"→ 发现每天都一样 → 直接把"星期三"写在日历上。</p>
+      <p>具体的折叠类型包括：</p>
+      <ul>
+        <li>死常量（Shape 相关的常量）：如 <code>ones_like(x)</code> 中 x 的 shape 如果固定，可以直接展开</li>
+        <li>数学常量：如 Positional Encoding 中的三角函数值、GELU 中的常数系数</li>
+        <li>Reshape/Transpose 顺序调整：对固定 shape 直接算出变形后的索引映射</li>
+      </ul>
+
+      <p><b>2. Identity 消除（Identity Elimination）</b></p>
+      <p>ONNX 里经常出现一些"什么都不做"的节点，比如：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+# 优化前：有一堆无用节点
+  x → Identity → Identity → Identity → y    ← 三个恒等节点
+  
+# 优化后：全部删掉
+  x → y
+      </pre>
+      <p>除了 Identity，还包括：</p>
+      <ul>
+        <li><b>Dropout</b>：推理模式下 Dropout 什么都不做，但导出时 PyTorch 可能还留着</li>
+        <li><b>Unsqueeze/Squeeze</b>：如果 shape 本来就不变，加维减维都是多余的</li>
+        <li><b>Cast（类型转换）</b>：如果转来转去回到同一类型，就可以消除</li>
+        <li><b>Slice（切片）</b>：如果切的范围跟原来一样，整个删除</li>
+      </ul>
+      <p><strong>直觉类比：</strong>文件里有一行注释写着"TODO: 不重要"，注释本身不影响功能，删掉让文件更清爽。</p>
+
+      <p><b>3. 死代码消除（Dead Code Elimination）</b></p>
+      <p>有些节点的计算结果<strong>从来没有被任何后续节点使用</strong>，这种节点就是"死代码"。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+# 优化前
+x → Add → temp1 → Relu → y
+    |                ↑
+    + → Mul → temp2 ↑  ← 这个 Mul 的结果（temp2）
+        没被任何人用
+      
+# 优化后
+x → Add → Relu → y   ← 删掉 Mul 节点
+      </pre>
+      <p>这种情况的常见来源：</p>
+      <ul>
+        <li>训练时为了统计用的辅助输出（loss、activation stats 等），推理时没用</li>
+        <li>PyTorch autograd 保留下来的梯度计算分支</li>
+        <li>调试用的 print 节点</li>
+        <li>JIT trace 过程中遗留的中间变量</li>
+      </ul>
+      <p><strong>直觉类比：</strong>你买了一箱苹果，把坏掉的挑出来扔掉。但后来你发现坏苹果从来没被处理过——它们一直占着箱子里的空间。扔掉它们箱子就轻了。</p>
+
+      <p><strong>比赛中的意义：</strong>运行 onnxsim 是在模型导出后<strong>最安全、收益最大的第一步优化</strong>。一条命令就能让模型节点数减少 20-40%，对推理性能有直接好处。</p>
+
+      <pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
+# 一行命令完成所有优化
+python -m onnxsim input.onnx output.onnx
+
+# 输出会显示：简化前 N 个节点 → 简化后 M 个节点
+      </pre>
+
+      <hr/>
+      <h3>四、ORT 的图优化级别——更深层的融合</h3>
+
+      <p>onnxsim 做完"表面清理"后，还有更深层的优化——由 ONNX Runtime（ORT）在执行时完成。ORT 把图优化分成三个等级：</p>
+
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">级别</th><th style="padding:6px;border:1px solid #90caf9;">做什么</th><th style="padding:6px;border:1px solid #90caf9;">安全吗</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>Basic（基础）</b></td><td style="padding:5px;border:1px solid #e0e0e0;">常量折叠 + Identity 消除 + 简单的算子融合（如 Conv+Add）</td><td style="padding:5px;border:1px solid #e0e0e0;">✅ 绝对安全</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>Extended（扩展）</b></td><td style="padding:5px;border:1px solid #e0e0e0;">复杂的算子融合：LayerNorm Fusion、Attention Fusion、GEMM+Activation Fusion</td><td style="padding:5px;border:1px solid #e0e0e0;">✅ 大部分安全</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>Layout（布局）</b></td><td style="padding:5px;border:1px solid #e0e0e0;">调整数据排布格式（如 NCHW → NCHWc），只对 CPU 有用</td><td style="padding:5px;border:1px solid #e0e0e0;">⚠ 某些模型精度微差</td></tr>
+      </table>
+
+      <p>ORT 默认开启全部三个级别。Extended 级别对 Pangu-Weather 最重要的融合包括：</p>
+      <ul>
+        <li><b>Layer Normalization Fusion</b>：把 LayerNorm 的 9+ 个小算子合并为 1 个，速度提升约 2-3 倍（对这一层而言）</li>
+        <li><b>GEMM Activation Fusion</b>：把 MatMul + Add + Relu/GELU 合并为一个 GEMM 调用</li>
+        <li><b>Attention Fusion</b>：把 QKV 投影 + Attention Score + Softmax + 加权求和 合并为一个 Attention Kernel</li>
+      </ul>
+
+      <hr/>
+      <h3>五、哪些算子难以自动融合？（比赛实战坑）</h3>
+
+      <p>不是所有算子都能被推理引擎自动融合。以下三类是"融合杀手"：</p>
+
+      <p><b>1️⃣ torch.split / torch.cat</b></p>
+      <p>PyTorch 里经常用 split 把一个张量分成几块（比如把 QKV 拆开），再用 cat 拼回去。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+# PyTorch 代码（看起来很简洁）
+Q, K, V = torch.split(x, d_h, dim=-1)   # 拆成三段
+output = torch.cat([Q_attn, K_attn, V_attn], dim=-1)  # 拼回去
+
+# ONNX 导出后变成
+Split → [Slice1, Slice2, Slice3]  → [各自处理] → Concat
+# 推理引擎很难把上面这些 Slice 合并——它们依赖运行时索引
+      </pre>
+      <p><strong>问题：</strong>Split 和 Cat 生成的数据<strong>在内存中不连续</strong>，推理引擎无法用一条 GEMM 指令处理，必须做多次 Gather/Scatter 操作。</p>
+      <p><strong>比赛中的对策：</strong></p>
+      <ul>
+        <li>如果可能，用 View / Reshape 代替 Split/Cat——保持内存连续性</li>
+        <li>如果必须用 Split/Cat，导出后用 Netron 可视化确认它们是否被融合</li>
+      </ul>
+
+      <p><b>2️⃣ 连续的 permute + reshape</b></p>
+      <pre style="background:#f5f5f5;padding:10px;padding:10px;border-radius:6px;font-size:13px;">
+x = x.permute(0, 2, 1, 3)  # 重排维度顺序
+x = x.reshape(B, H, N, -1)  # 改变形状
+      </pre>
+      <p>在普通 GPU 推理中，permute 需要<strong>重新排列内存布局</strong>（不是简单地修改元数据）。连续的 permute + reshape 会让推理引擎做大量<strong>显存拷贝</strong>，不能和相邻的 MatMul 融合。</p>
+      <p><strong>比赛中的对策：</strong>尽量把维度顺序设计成<strong>一开始就正确</strong>，避免导出后再做多次转置。</p>
+
+      <p><b>3️⃣ 自定义 / 非标准激活函数</b></p>
+      <p>Pangu-Weather 的激活函数是 GELU。如果 PyTorch 导出时 GELU 被展开为多个小算子（如 erf + Mul 等），ONNX 里就变成一堆独立节点，推理引擎可能无法识别并重新融合回去。</p>
+      <p><strong>比赛中的对策：</strong>使用 opset ≥ 15 可以让很多高级算子保持一体。如果国产引擎不支持 ONNX 原生 GELU 算子，可能需要自己写一个融合 Kernel。</p>
+
+      <hr/>
+      <h3>六、一张表看懂 ONNX 图优化全流程</h3>
+
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">步骤</th><th style="padding:6px;border:1px solid #90caf9;">工具/阶段</th><th style="padding:6px;border:1px solid #90caf9;">做什么</th><th style="padding:6px;border:1px solid #90caf9;">节点减少效果</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">① 导出</td><td style="padding:5px;border:1px solid #e0e0e0;">torch.onnx.export</td><td style="padding:5px;border:1px solid #e0e0e0;">do_constant_folding=True</td><td style="padding:5px;border:1px solid #e0e0e0;">~10%</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">② 简化</td><td style="padding:5px;border:1px solid #e0e0e0;">onnxsim</td><td style="padding:5px;border:1px solid #e0e0e0;">常量折叠 + Identity 消除 + 死代码消除</td><td style="padding:5px;border:1px solid #e0e0e0;">~20-40%</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">③ ORT Basic</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime</td><td style="padding:5px;border:1px solid #e0e0e0;">简单的算子融合</td><td style="padding:5px;border:1px solid #e0e0e0;">~5-10%</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">④ ORT Extended</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime</td><td style="padding:5px;border:1px solid #e0e0e0;">LayerNorm/Attention/Gemm+Act 融合</td><td style="padding:5px;border:1px solid #e0e0e0;">~30-50%</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">⑤ 引擎优化</td><td style="padding:5px;border:1px solid #e0e0e0;">国产推理引擎</td><td style="padding:5px;border:1px solid #e0e0e0;">自定义 Kernel + 内存池</td><td style="padding:5px;border:1px solid #e0e0e0;">延迟大幅下降</td></tr>
+      </table>
+
+      <hr/>
+      <h3>七、核心概念速查表</h3>
+
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">概念</th><th style="padding:6px;border:1px solid #90caf9;">一句话解释</th><th style="padding:6px;border:1px solid #90caf9;">比赛中的意义</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">算子融合</td><td style="padding:5px;border:1px solid #e0e0e0;">将多个小计算合并为大计算，减少启动和访存次数</td><td style="padding:5px;border:1px solid #e0e0e0;">推理延迟降低 20-50% 的核心手段</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">常量折叠</td><td style="padding:5px;border:1px solid #e0e0e0;">把只依赖常量的计算提前算好，写死进模型文件</td><td style="padding:5px;border:1px solid #e0e0e0;">减少推理时的冗余计算</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Identity 消除</td><td style="padding:5px;border:1px solid #e0e0e0;">删除什么都不做的算子（Dropout/Cast/Squeeze）</td><td style="padding:5px;border:1px solid #e0e0e0;">清理推理时不用的训练痕迹</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">死代码消除</td><td style="padding:5px;border:1px solid #e0e0e0;">删除计算结果不被任何人使用的节点</td><td style="padding:5px;border:1px solid #e0e0e0;">去掉无用分支，减少显存占用</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">GEMM</td><td style="padding:5px;border:1px solid #e0e0e0;">通用矩阵乘法，可融合偏置和激活</td><td style="padding:5px;border:1px solid #e0e0e0;">推理引擎里最核心的高性能算子</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Fusion Kernel</td><td style="padding:5px;border:1px solid #e0e0e0;">手动或自动编写的融合后 GPU 函数</td><td style="padding:5px;border:1px solid #e0e0e0;">先用 onnxsim + ORT 自动化，极限优化可手动写</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Split/Cat 问题</td><td style="padding:5px;border:1px solid #e0e0e0;">PyTorch 里方便的切分操作，导出后难以融合</td><td style="padding:5px;border:1px solid #e0e0e0;">设计推理图时尽量用 View/Reshape 替代</td></tr>
+      </table>
+
+      <hr/>
+      <h3>八、算子融合的代价：为什么不全部融合？</h3>
+
+      <p>既然融合这么好，为什么不把整个模型融合成一个超级 Kernel？</p>
+      <p>三个现实限制：</p>
+      <ol>
+        <li><b>寄存器资源有限</b>：GPU 的寄存器数量很少（每个 CUDA 线程最多 255 个）。一个大融合 Kernel 可能把所有中间变量压在寄存器里，导致寄存器溢出（spill）到显存，反而变慢。</li>
+        <li><b>Occupancy 下降</b>：Kernel 越大、每个线程用的资源越多，同一时间能并行运行的线程就越少。极端情况下，融合后的 Kernel 并行度不够，延迟不降反升。</li>
+        <li><b>计算形状不确定性</b>：如果某一步的 tensor shape 动态变化（例如非平凡的条件分支），编译器无法提前决定最优的融合策略。</li>
+      </ol>
+      <p><strong>比赛中的意义：</strong>不要追求"全部融合"。先用 onnxsim 和 ORT 做自动化融合，如果某个中间结果频繁读写（如 LayerNorm 的中间变量），再考虑手动写 Fusion Kernel。</p>
+
+      <hr/>
+      <h3>九、常见误区</h3>
+      <ul>
+        <li><b>onnxsim 什么都能优化</b>：onnxsim 擅长常量折叠和 Identity 消除，但<strong>不擅长</strong>做层级的算子融合（如 LayerNorm 融合）。那种融合需要 ORT Extended 级别或手动写代码。</li>
+        <li><b>融合一定比不融合快</b>：不一定。如上面说的，资源竞争时融合可能反而不利。需要实测验证。</li>
+        <li><b>导出的 ONNX 直接能用最优性能</b>：不，刚导出的 ONNX 是"原始图"，必须经过 onnxsim 和 ORT 优化后才能用。</li>
+        <li><b>国产引擎会做和 ORT 一样的融合</b>：不一定。国产引擎的算子库覆盖度不同，可能缺少 Attention/LayerNorm 等高阶融合。需要单独验证。</li>
+        <li><b>INT8 模型不需要算子融合</b>：相反——INT8 模型的算子融合更关键，因为 INT8 每个元素占的空间小，减少中间显存读写的收益更大。</li>
+      </ul>
+
+      <hr/>
+      <h3>📅 明日预告（第8天）：异构计算与 GPU 内存模型</h3>
+      <p>明天深入 GPU 内部，从 Global Memory → Shared Memory → Register 的访问延迟差异讲起，解释 Cache Line、Memory Coalescing（连续地址读取原理）、Occupancy 的三重限制以及它们如何在气象模型推理中发挥作用。</p>
+      <p>前置知识：了解 GPU 和 CPU 是两种不同的芯片即可。</p>
       ]]></description>
     </item>
 
