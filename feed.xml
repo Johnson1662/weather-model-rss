@@ -5,7 +5,7 @@
     <link>https://johnson1662.github.io/weather-model-rss/</link>
     <description>围绕2026年先导杯"基于国产科学智算生态的气象大模型推理部署优化"赛题，每日推送一篇零基础精讲文章，覆盖模型压缩、量化、推理加速等理论知识。</description>
     <language>zh-CN</language>
-    <lastBuildDate>2026-06-22 22:00:00 +0800</lastBuildDate>
+    <lastBuildDate>2026-06-25 22:00:00 +0800</lastBuildDate>
     <ttl>1440</ttl>
 
     <item>
@@ -128,21 +128,9 @@ Output = Attn · V
 
       <p><strong>5. RoPE 旋转位置编码</strong></p>
       <p>RoPE 把 Q/K 的每一对维度看成一个二维向量，按位置旋转角度。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-| 项目 | 内容 |
-|------|------|
-| 每对维度 | (d_2i-1, d_2i) |
-| 基础角度 | θ_i = 10000^(-2i/d) |
-| 二维旋转 | [cos -sin; sin cos] · [q_2i-1; q_2i] |
-| 结果 | 注意力分数自动变成"相对位置"的函数 |
-      </pre>
       <p><strong>比赛中的意义：</strong>RoPE 让模型学到"相邻网格"的关系，有助于未见区域外推。</p>
 
       <h3>四、3D 窗口注意力的额外成本</h3>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-2D 窗口：O( g_h·g_w · (P·g_p)·(P·g_p) )
-3D 窗口：O( g_h·g_w·g_p · (P/g_p)·(P/g_p) )
-      </pre>
       <p>3D 只比 2D 多乘一个 g_p，H/W 维度复杂度不变。<strong>但物理上保留了气压层之间的耦合。</strong></p>
       <p><strong>比赛中的意义：</strong>国产推理引擎优化时，3D 窗口 Attention 会映射成"很多小 Gemm + 一次 gather"，比全局注意力更易做算子融合。</p>
 
@@ -172,138 +160,33 @@ Output = Attn · V
 
       <h3>一、什么是模型剪枝？</h3>
       <p>想象你有一颗枝叶茂密的圣诞树，想要它更轻盈、更容易搬运。剪枝就是<strong>把不重要的枝叶剪掉</strong>，让树保持大致形态，但重量和体积明显减轻。</p>
-      <p>对应到神经网络：</p>
-      <ul>
-        <li>树叶 = 参数（权重）</li>
-        <li>树枝 = 计算</li>
-        <li>整棵树 = 模型</li>
-      </ul>
+      <p>对应到神经网络：树叶 = 参数（权重），树枝 = 计算，整棵树 = 模型。</p>
       <p>剪掉不重要的参数后，模型参数量变少、速度变快、体积变小，但精度损失极小甚至不变。</p>
 
       <h3>二、结构化 vs 非结构化剪枝</h3>
-
-      <p><b>非结构化剪枝（Unstructured Pruning）</b></p>
-      <p>像用剪刀<strong>随机剪掉单根细枝</strong>。剪掉权重矩阵里的单个数字，不按任何行列规律。结果是一个充满了"洞"的稀疏矩阵。</p>
-
-      <p><b>结构化剪枝（Structured Pruning）</b></p>
-      <p>像修剪专业园艺：<strong>一整根粗枝或一整片叶簇一次性剪掉</strong>。例如：</p>
-      <ul>
-        <li>剪掉整个卷积 Filter（卷积核）</li>
-        <li>剪掉整个通道（Channel）</li>
-        <li>剪掉整个注意力头（Attention Head）</li>
-        <li>整层删掉</li>
-      </ul>
-
+      <p><b>非结构化剪枝（Unstructured Pruning）</b>：像用剪刀随机剪掉单根细枝。剪掉权重矩阵里的单个数字，不按任何行列规律。结果是一个充满了"洞"的稀疏矩阵。</p>
+      <p><b>结构化剪枝（Structured Pruning）</b>：像修剪专业园艺：一整根粗枝或一整片叶簇一次性剪掉。例如：剪掉整个卷积 Filter（卷积核）、整个通道（Channel）、整个注意力头（Attention Head）或整层。</p>
       <table style="border-collapse:collapse;width:100%;margin:8px 0;">
         <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">维度</th><th style="padding:6px;border:1px solid #90caf9;">非结构化剪枝</th><th style="padding:6px;border:1px solid #90caf9;">结构化剪枝</th></tr>
         <tr><td style="padding:5px;border:1px solid #e0e0e0;">剪掉什么</td><td style="padding:5px;border:1px solid #e0e0e0;">单个权重数字</td><td style="padding:5px;border:1px solid #e0e0e0;">一整组（通道/头/层）</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">压缩率</td><td style="padding:5px;border:1px solid #e0e0e0;">理论高，实际难利用</td><td style="padding:5px;border:1px solid #e0e0e0;">实际加速比明确</td></tr>
         <tr><td style="padding:5px;border:1px solid #e0e0e0;">硬件兼容</td><td style="padding:5px;border:1px solid #e0e0e0;">需专用稀疏加速库</td><td style="padding:5px;border:1px solid #e0e0e0;">普通硬件即可加速</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">能否直接用</td><td style="padding:5px;border:1px solid #e0e0e0;">需 CSR/稀疏算子</td><td style="padding:5px;border:1px solid #e0e0e0;">直接代入推理引擎</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">比赛适合度</td><td style="padding:5px;border:1px solid #e0e0e0;">低（静态形状限制）</td><td style="padding:5px;border:1px solid #e0e0e0;"><strong>高（唯一选项）</strong></td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">比赛适合度</td><td style="padding:5px;border:1px solid #e0e0e0;">低</td><td style="padding:5px;border:1px solid #e0e0e0;"><strong>高（唯一选项）</strong></td></tr>
       </table>
-
-      <p><b>为什么比赛只能用结构化？</b></p>
-      <p>先导杯要求在国产推理引擎上部署，推理引擎处理的是 GPU 上执行的计算矩阵。非结构化剪枝后的矩阵"东缺一块西缺一块"，硬件 SIMD 指令（同一周期执行多条数据）和现代 Tensor Core 都依赖规则的矩阵布局。<strong>结构化剪枝直接改变矩阵形状，生成紧凑的稠密张量，推理引擎可以直接吃进去。</strong></p>
       <p><strong>比赛中的意义：</strong>一开始就要走结构化剪枝路线，否则下游 ONNX 导出和推理引擎部署会完全不兼容。</p>
 
-      <h3>三、剪枝的"圣杯"：Turning a Keg into a Shotgun</h3>
-      <p>经典综述论文的标题很形象：把<strong>一桶散弹（Keg）改造成霰弹枪（Shotgun）</strong>。意思不是变复杂，而是把原本松散分布的压缩能力<strong>集中</strong>到几个关键位置，让一次修剪就能发挥最大威力。</p>
-      <p>在实践中，这意味着：</p>
-      <ul>
-        <li>不要均匀地每个层都剪一点</li>
-        <li>找到冗余集中区域，集中火力</li>
-      </ul>
-      <p>结构化剪枝能让每次"开枪"都命中要害。</p>
+      <h3>三、核心难题：Residual 对齐</h3>
+      <p>如果你剪了 Conv1（让它输出更少通道），但 Conv2 和短路连接还保持原来的通道数，那么在加法那里，维度对不上，模型直接报错。这就是"依赖关系"。</p>
+      <p>TorchPruning 提出的<strong>依赖图（DepGraph）</strong>是自动化的答案：分析网络连接，找出所有强耦合的节点组，同一个组里的 layer 必须同时剪或同时保留。</p>
 
-      <h3>四、核心难题： Residual 对齐</h3>
-
-      <p>理解 Dependency Graph 之前，必须理解这个痛点。</p>
-      <p>看下面这个 residual block：</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-输入 x
-  ↓
-Conv1 / Linear1  →  y
-  ↓                 ↓
-BN / LN  ---------  +  （shortcut）
-  ↓
-Conv2 / Linear2  →  z
-  ↓
-输出 = x + z
-      </pre>
-      <p><b>问题：</b>如果你剪了 Conv1（让它输出更少通道），但 Conv2 和短路连接还保持原来的通道数，那么在 + 号那里，<strong>维度对不上</strong>，模型直接报错。</p>
-      <p>这就是"依赖关系"：Conv1、BN、Conv2、shortcut 这四个操作共享同一个通道维度。剪一个，必须同时剪其他几个。</p>
-      <p>手动梳理这种依赖关系极其痛苦，每个网络结构都要单独处理。</p>
-
-      <h3>五、Dependency Graph 解决方案</h3>
-      <p>TorchPruning 提出的 <strong>依赖图（DepGraph）</strong>是这一切的自动化答案。核心思想非常简单：</p>
-
-      <p><b>步骤1：给每个层的输入输出打"标签"</b></p>
-      <p>分析网络连接，把每一层拆成"输入端"和"输出端"两个节点。如果两个节点共享同一个修剪方案（例如都按通道剪），就连一条边。</p>
-
-      <p><b>步骤2：找"连通分量"</b></p>
-      <p>用连通分量算法，找出所有强耦合的节点组。同一个组里的 layer，必须同时剪或同时保留。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-D(f_i^-, f_j^+) = 1[f_i^- ↔ f_j^+] ∨ 1[i=j ∧ sch(f_i^-) = sch(f_j^+)]
-      </pre>
-      <p>翻译：节点 i 和节点 j 之间有依赖，意味着它们连通，或者在同一个层内共享同一个修剪方案（sch）。</p>
-
-      <p><b>步骤3：组级重要性评分</b></p>
-      <p>不再是"每个层单独打分"，而是<strong>把耦合层当成一个整体打分</strong>，再决定这个组整体剪多少。</p>
-
-      <p><strong>比赛中的意义：</strong>气象模型的 Stage 3-4 里有很多 Residual Block，用 DP 思想剪 head 或 channels 时，依赖图可以自动识别哪些 Attention 头和线性投影必须一起剪，避免维度崩溃。</p>
-
-      <h3>六、剪枝重要性评估：为什么 Taylor 二阶比 L1 准？</h3>
-
-      <p>剪枝的核心问题是：<strong>哪个参数最不重要？</strong></p>
-
-      <p><b>L1 范数方法（最简单）</b></p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">重要性 = |w_i|    ← 绝对值小的就剪</pre>
-      <p>直觉："小参数影响小"。但在实际网络中，一个绝对值很小的权重可能正好负责关键的"偏差修正"，剪掉后精度立刻崩。</p>
-
-      <p><b>Taylor 二阶展开（更准）</b></p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-I_i ≈ 0.5 × (∂L/∂w_i)² × w_i²
-      </pre>
-      <p>展开解释：</p>
-      <ul>
-        <li>∂L/∂w_i：损失函数对 w_i 的梯度，表示 w_i 当前对损失有多敏感</li>
-        <li>w_i²：w_i 自身的大小</li>
-        <li>乘积：敏感 × 自身大小 = 这个权重对整体性能的贡献</li>
-      </ul>
-      <p>一阶项（梯度）告诉我们"动一动会怎样"，二阶项（权重平方）告诉我们"它现在有多强"。</p>
-
-      <p><b>直观类比：</b></p>
-      <p>两张试卷评分：</p>
-      <ul>
-        <li>L1：只看这个学生的卷面分，低分的就挂科</li>
-        <li>Taylor：看"卷面分 × 进步空间"，一个现在 60 分但提升潜力大的人，不能轻易挂</li>
-      </ul>
-
-      <p><strong>比赛中的意义：</strong>Taylor 二阶方法的剪枝效果通常比 L1 高 1-3 个百分点精度。先导杯评分里精度权重极高，值得多花 1-2 天调试 Taylor 评分。</p>
-
-      <h3>七、核心概念速查表</h3>
-      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
-        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">概念</th><th style="padding:6px;border:1px solid #90caf9;">一句话</th><th style="padding:6px;border:1px solid #90caf9;">比赛中的意义</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">非结构化剪枝</td><td style="padding:5px;border:1px solid #e0e0e0;">随机剪单个权重</td><td style="padding:5px;border:1px solid #e0e0e0;">不选，硬件不支持</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">结构化剪枝</td><td style="padding:5px;border:1px solid #e0e0e0;">成组剪（通道/头/层）</td><td style="padding:5px;border:1px solid #e0e0e0;">比赛唯一可行路径</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Dependency Graph</td><td style="padding:5px;border:1px solid #e0e0e0;">自动找耦合层组</td><td style="padding:5px;border:1px solid #e0e0e0;">处理 Residual 的救星</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Taylor Importance</td><td style="padding:5px;border:1px solid #e0e0e0;">用梯度×权重计算重要性</td><td style="padding:5px;border:1px solid #e0e0e0;">比 L1 更准，精度更高</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Group-level Score</td><td style="padding:5px;border:1px solid #e0e0e0;">把耦合层整体打分</td><td style="padding:5px;border:1px solid #e0e0e0;">避免剪单个导致维度崩溃</td></tr>
-      </table>
-
-      <h3>八、常见误区</h3>
-      <ul>
-        <li><b>剪掉权重 = 加速：</b>非结构化剪枝剪了 90% 权重，推理速度可能反而略慢（稀疏访存开销）。结构化剪枝是唯一能稳提速的方法。</li>
-        <li><b>结构化剪枝只能剪 Conv：</b>Transformer 能剪头、剪 token、甚至剪 stage，结构化定义很泛。</li>
-        <li><b>L1 绝对不能用：</b>也不是；如果时间紧，L1 可以快速做实验，Taylor 留在调优阶段。</li>
-        <li><b>Dependency Graph 只适用于 CNN：</b>TorchPruning 的论文明确验证了 ViT（Pangu-Weather 的核心结构），完全适用。</li>
-      </ul>
+      <h3>四、Taylor 二阶重要性</h3>
+      <p>L1 范数（绝对值大小）只看权重本身，可能错杀重要的小权重。Taylor 二阶展开：</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">I_i ≈ 0.5 × (∂L/∂w_i)² × w_i²</pre>
+      <p>一阶项（梯度）告诉我们"动一动会怎样"，二阶项（权重平方）告诉我们"它现在有多强"。乘积 = 这个权重对整体性能的贡献。</p>
+      <p><strong>比赛中的意义：</strong>Taylor 二阶方法的剪枝效果通常比 L1 高 1-3 个百分点精度。先导杯评分里精度权重极高，值得调试 Taylor 评分。</p>
 
       <hr/>
       <h3>📅 明日预告：低秩分解理论</h3>
-      <p>明天讲 CP 分解和 Tucker 分解的数学本质区别、SVD 奇异值谱如何判断一个矩阵"是否低秩"，以及在气象模型上实操 SVD 分析的思路。</p>
-      <p>前置知识：会看矩阵乘法即可。不需要线性代数基础。</p>
+      <p>明天讲 CP 分解和 Tucker 分解的数学本质区别、SVD 奇异值谱如何判断一个矩阵"是否低秩"。</p>
       ]]></description>
     </item>
     <item>
@@ -315,75 +198,25 @@ I_i ≈ 0.5 × (∂L/∂w_i)² × w_i²
       <h2>今日主题：量化基础与激活值异常值</h2>
       <p>从零搞懂"为什么把大模型从浮点数压缩成 8 位整数会炸精度"，以及 SmoothQuant 如何<strong>数学等价</strong>地把"难量化"的激活值异常值平滑掉，换来真正的 INT8 全链路推理。</p>
 
-      <h3>一、量化到底在做什么？（一碗水端平的比喻）</h3>
-      <p>模型里的数和温度计读数一样：</p>
-      <ul>
-        <li><strong>浮点（FP16/FP32）</strong>：细粒度水银温度计，能读 36.8234°C，但贵、占空间、移动慢。</li>
-        <li><strong>整数（INT8）</strong>：普通体温枪，只能读到整数 37°C，便宜、快、省电。</li>
-      </ul>
-      <p>量化就是<strong>把细粒度温度计换成整数体温枪</strong>，并尽量不丢信息。</p>
-      <p>一碗水的等距刻度：</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-比例因子 s = (max(x) - min(x)) / 127
-量化     x_q = round( x / s ) + z  （z 是零点偏移）
-反量化   x   = (x_q - z) * s
-      </pre>
-
-      <h3>二、对称 vs. 非对称量化</h3>
       <table style="border-collapse:collapse;width:100%;margin:8px 0;">
         <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">类型</th><th style="padding:6px;border:1px solid #90caf9;">公式</th><th style="padding:6px;border:1px solid #90caf9;">适用场景</th></tr>
         <tr><td style="padding:5px;border:1px solid #e0e0e0;">对称</td><td style="padding:5px;border:1px solid #e0e0e0;">x_q = round(x / s)</td><td style="padding:5px;border:1px solid #e0e0e0;">零均值分布，如权重</td></tr>
         <tr><td style="padding:5px;border:1px solid #e0e0e0;">非对称</td><td style="padding:5px;border:1px solid #e0e0e0;">x_q = round(x / s) + z</td><td style="padding:5px;border:1px solid #e0e0e0;">存在偏移，如 Softmax 输出</td></tr>
       </table>
 
-      <h3>三、为什么 Transformer 里有激活值异常值？</h3>
-      <p>正常数据分布像正态钟形曲线，极端值很少。但 Transformer 里会<strong>局部冒出一个特别大的数</strong>（比如 10-100 倍标准差之外）。</p>
-      <p>直觉：Softmax 对指数敏感，少数"超级活跃"的 token 会在某些通道上把数值"撑爆"。LLM 的"异常值"和气象模型不是同一个来源，但<strong>激活异常</strong>是 Transformer 类模型的通用特征。</p>
       <p><strong>比赛中的意义：</strong>如果直接粗暴地将激活量化为 INT8 per-tensor，一个 outlier 就能吃掉大部分量程，其余正常值全被压成近似 0，精度直接崩溃。</p>
 
-      <h3>四、LLM.int8()：用 FP16 救急，但靠硬件缓存</h3>
-      <p>LLM.int8() 的思路：先把异常值找出来，丢给 FP16 处理，其余做 INT8。结果：准确，但 <strong>延迟掉不下来</strong>（来回转换开销），不适合推理引擎单一直道。</p>
-
-      <h3>五、SmoothQuant：把异常值"搬家"</h3>
-      <p>核心思想：<strong>激活难量化？那让权重难量化，激活就变简单了。</strong></p>
-      <p>数学上等价变换（注意：这不改模型输出，只是缩放）：</p>
+      <p><b>SmoothQuant 核心思想：</b>激活难量化？那让权重难量化，激活就变简单了。</p>
       <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-Y = X · W
-
-= (X / s) · (s · W)
-
-令   X̂ = X * diag(s)^(-1)    （激活被平滑）
-    Ŵ  = diag(s) * W         （权重被放大）
-则   Y = X̂ · Ŵ
-      </pre>
-      <p>关键公式：每通道的迁移强度</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-s_j = (||X_j||^α) / (||W_j||^(1-α)),   j=1..C，α ∈ [0,1]
-α 越大：把更多异常值从激活搬到权重上
-典型值：α=0.5（平衡） 或 α=0.75（更激进的异常值平滑）
-      </pre>
+Y = X · W  →  Y = (X / s) · (s · W)
+令   X̂ = X · diag(s)^(-1)    （激活被平滑）
+    Ŵ  = diag(s) · W         （权重被放大）
+则   Y = X̂ · Ŵ</pre>
       <p><strong>比赛中的意义：</strong>SmoothQuant 是"离线做一次，线上纯 INT8"，不需要改推理引擎。适合先导杯的有限时间窗口。</p>
-
-      <h3>六、实战中看得到的差异（SmoothQuant 消融表）</h3>
-      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
-        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">方法</th><th style="padding:6px;border:1px solid #90caf9;">精度损失</th><th style="padding:6px;border:1px solid #90caf9;">引擎兼容</th><th style="padding:6px;border:1px solid #90caf9;">离线算力</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">W8A8（暴力）</td><td style="padding:5px;border:1px solid #e0e0e0;">崩溃</td><td style="padding:5px;border:1px solid #90caf9;">是</td><td style="padding:5px;border:1px solid #e0e0e0;">0</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">LLM.int8()</td><td style="padding:5px;border:1px solid #e0e0e0;">几乎无损</td><td style="padding:5px;border:1px solid #e0e0e0;">否</td><td style="padding:5px;border:1px solid #e0e0e0;">0</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>SmoothQuant-O2</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">~0.1-0.3%</td><td style="padding:5px;border:1px solid #90caf9;">是</td><td style="padding:5px;border:1px solid #e0e0e0;">低（512句校准）</td></tr>
-      </table>
-
-      <h3>七、常见误区</h3>
-      <ul>
-        <li><b>INT8 一定比 FP16 快：</b>要看引擎是否原生支持 INT8 GEMM；否则反而不如 FP16 Tensor Core 吞吐高。</li>
-        <li><b>异常值只存在于 LLM：</b>CNN 里也有 channel outlier，但没 LLM 那么夸张；气象模型尚未公开结论，建议自己画直方图验证。</li>
-        <li><b>α 越大越好：</b>α 太大，权重被放大太多，反而会引入饱和。</li>
-        <li><b>s 需要每层学习：</b>不需要，s 是离线通过少量校准句算出来的标量，不需要训练。</li>
-      </ul>
 
       <hr/>
       <h3>📅 明日预告：ONNX 生态基础</h3>
-      <p>明天从零讲 ONNX 是什么、Opset 版本差异、动态 shape vs 静态 shape 在推理引擎里怎么发挥作用，以及 Pangu-Weather 导出 ONNX 的常见坑。</p>
-      <p>前置知识：会看 Python 字典即可。</p>
+      <p>明天从零讲 ONNX 是什么、Opset 版本差异、动态 shape vs 静态 shape 在推理引擎里怎么发挥作用。</p>
       ]]></description>
     </item>
 
@@ -394,197 +227,20 @@ s_j = (||X_j||^α) / (||W_j||^(1-α)),   j=1..C，α ∈ [0,1]
       <pubDate>2026-06-21 22:00:00 +0800</pubDate>
       <description><![CDATA[
       <h2>今日主题：ONNX 生态基础</h2>
-      <p>从零讲明白三个问题：ONNX 是什么、为什么需要它、气象模型部署中它扮演什么角色。本篇文章不需要任何模型部署经验。</p>
+      <p>从零讲明白三个问题：ONNX 是什么、为什么需要它、气象模型部署中它扮演什么角色。</p>
 
       <h3>一、ONNX 是什么？一个"通用翻译器"</h3>
-      <p>想象你正在用 Excel 做表格，但你的同事用的是 WPS 表格。这两个软件的文件格式不同，直接互换会乱码。<strong>中间标准格式（比如 CSV）</strong> 可以让双方互通。</p>
-      <p>ONNX（Open Neural Network Exchange，开放神经网络交换格式）就是深度学习界的"CSV"。</p>
-      <ul>
-        <li><strong>训练框架</strong>有很多：PyTorch、TensorFlow、PaddlePaddle……各有一套文件格式。</li>
-        <li><strong>推理引擎</strong>也有很多：ONNX Runtime、TensorRT、OpenVINO、国产 DTK……它们不能直接读 PyTorch 的 .pth 文件。</li>
-        <li><strong>解决方案：</strong>先把 PyTorch 模型转成 ONNX 格式（.onnx 文件），然后推理引擎都能读这个统一格式。</li>
-      </ul>
-      <p style="text-align:center;"><strong>用一个公式总结：</strong></p>
-      <pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:14px;text-align:center;">
-PyTorch  →  ONNX （中间语言） → 任意推理引擎
-      </pre>
-      <p><strong>比赛中的意义：</strong>先导杯要求你优化模型后在国产推理引擎上跑推理。你不可能把 PyTorch 直接部署到国产卡上——必须先走 ONNX 这座"桥梁"。</p>
+      <p>ONNX（Open Neural Network Exchange，开放神经网络交换格式）是深度学习界的"CSV"：把不同训练框架的模型统一成标准格式，让所有推理引擎都能读取。</p>
 
-      <h3>二、ONNX 文件里到底装了什么？</h3>
-      <p>.onnx 文件就是一个"蓝本 + 说明书 + 零件箱"的三位一体：</p>
-      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
-        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">组成部分</th><th style="padding:6px;border:1px solid #90caf9;">内容</th><th style="padding:6px;border:1px solid #90caf9;">类比</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>计算图（Graph）</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">算子节点 + 数据边，描述计算流程</td><td style="padding:5px;border:1px solid #e0e0e0;">建筑蓝图</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>权重值（Weights）</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">所有 Layer 的数值参数</td><td style="padding:5px;border:1px solid #e0e0e0;">预装好的零件</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>元数据（Metadata）</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">OpSet 版本、模型版本、作者等</td><td style="padding:5px;border:1px solid #e0e0e0;">说明书</td></tr>
-      </table>
-      <p>整个文件用 <strong>Protobuf</strong> 序列化——你可以理解成"极高效打包"，让文件小、加载快。</p>
+      <h3>二、OpSet 版本</h3>
+      <p>OpSet（算子集版本）是所有这些算子版本的集合。Pangu-Weather 的 LayerNorm 在 OpSet 15 标准版本中才有显式算子。建议 opset_version=15 或更高。</p>
 
-      <p>来看一个简单模型的 ONNX 计算图示意（只有 1 个 ReLU 激活层）：</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-输入: "input" (shape=[1,3,224,224], dtype=float32)
-  ↓
-节点: "Relu" (op_type="Relu")
-  ↓
-输出: "output" (shape=[1,1000], dtype=float32)
-      </pre>
-      <p>你不需要自己手写这个——PyTorch 的 <code>torch.onnx.export()</code> 会自动追踪你的模型，生成这个图。</p>
-
-      <h3>三、整体生态：一张图看全</h3>
-      <p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/onnx-ecosystem.svg" alt="ONNX 生态体系全景图" style="max-width:100%;border-radius:8px;"/></p>
-      <p>这张图展示了一条完整的部署流水线：不同的训练框架 → 统一的 ONNX 中间表示 → <strong>图优化</strong>（算子融合、常量折叠）→ 各种推理引擎（CPU/CUDA/TensorRT/国产引擎）。这就是"一次训练，到处部署"的真正含义。</p>
-
-      <h3>四、OpSet 版本是什么？为什么有版本号？</h3>
-      <p>ONNX 定义了一套标准"算子"（操作符），比如 Conv（卷积）、Relu、MatMul（矩阵乘法）、Softmax 等。每个算子有一个版本历史。</p>
-      <p>OpSet（算子集版本）就是<strong>所有这些算子版本的集合</strong>。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-| OpSet 版本 | 关键变化 | 对气象模型的意义 |
-|-----------|---------|-----------------|
-| ≤ 10 | 基础算子（Conv、Relu、MatMul） | 太老，无 bicubic 等高级算子 |
-| 11 | 加入 Resize/bicubic、ScatterND、TopK | SRCNN 超分辨率必备 |
-| 12 | ReduceOps 规范化、Constant 增强 | 兼容性改进 |
-| 13 | Softmax 更新、Axis 参数标准化 | 减少算子变体 |
-| 14 | 加入 GRU/LSTM 变体、Split 微调 | 不常用 |
-| 15 | 加入 <strong>LayerNormalization</strong> | ⭐ Pangu-Weather 的 LayerNorm 需要此版本 |
-| 16 | Loop 增强、If/Then 改进 | 可选 |
-| 17+ | 更多高级算子（GridSample、EmbedLayerNormalization） | 新模型可能依赖 |
-      </pre>
-      <p><strong>关键结论：</strong></p>
-      <ul>
-        <li>Pangu-Weather 的 LayerNorm 在 OpSet 15 标准版本中才有显式算子。如果你的导出版本太低，PyTorch 要么报错，要么把一个 LayerNorm 拆成几十个 Add/Mul/Sqrt 小算子——<strong>完全无法融合</strong>，推理速度极慢。</li>
-        <li><strong>建议：</strong>对 Pangu-Weather，<code>opset_version=15</code> 是最低要求，推荐用 <code>opset_version=17</code> 更安全。</li>
-      </ul>
-      <p><strong>比赛中的意义：</strong>导出时 opset 低于 15，LayerNorm 会被拆碎，国产推理引擎可能无法自动融合。导出时报个错调版本是最快的坑。</p>
-
-      <h3>五、动态 Shape vs 静态 Shape：推理引擎为什么"挑食"？</h3>
-
-      <p><b>静态 Shape（Static Shape）</b></p>
-      <p>导出时输入和输出的每个维度大小是固定的。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-输入 shape: [1, 5, 721, 1440, 4]   ←  batch=1，完全固定
-      </pre>
-      <ul>
-        <li><strong>优势：</strong>推理引擎可以提前做内存布局优化、算子融合、Kernel 静态编译——跳得很准。</li>
-        <li><strong>劣势：</strong>换一个 batch size 或不同分辨率，就必须重新导出。</li>
-      </ul>
-
-      <p><b>动态 Shape（Dynamic Shape）</b></p>
-      <p>某些维度（通常是 batch size）在运行时才确定。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-输入 shape: [dynamic_batch, 5, 721, 1440, 4]
-       ↑ 这个维度可变
-      </pre>
-      <ul>
-        <li><strong>优势：</strong>灵活，同一版 ONNX 可以处理不同 batch size。</li>
-        <li><strong>劣势：</strong>推理引擎无法提前做深度优化。每次运行都要动态分配内存、动态选 kernel，性能损失 ~10-30%。</li>
-      </ul>
-
-      <p><strong>比赛中的意义：</strong></p>
-      <ul>
-        <li>先导杯评测量 <strong>Latency（单次推理延迟）</strong>，固定输入 shape 是最优选择。</li>
-        <li>用 <code>dynamic_axes</code> 让 batch_size 动态很诱人，但会牺牲推理速度。</li>
-        <li><strong>推荐做法：</strong>导出时固定 batch=1（单样本推理），后续裁剪优化后如果发现能扩 batch，再单独导出静态 shape 的新 ONNX。</li>
-      </ul>
-
-      <p>PyTorch 导出时的动态/静态设定：</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# 完全静态（推荐比赛用）
-torch.onnx.export(model, dummy_input, "model.onnx",
-    opset_version=15,
-    input_names=['input'],
-    output_names=['output']
-)
-
-# 带动态 batch（灵活但慢）
-torch.onnx.export(model, dummy_input, "model.onnx",
-    opset_version=15,
-    input_names=['input'],
-    output_names=['output'],
-    dynamic_axes={
-        'input':  {0: 'batch_size'},   # 第一维可变
-        'output': {0: 'batch_size'}
-    }
-)
-      </pre>
-
-      <h3>六、torch.onnx.export() 关键参数详解</h3>
-      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
-        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">参数</th><th style="padding:6px;border:1px solid #90caf9;">作用</th><th style="padding:6px;border:1px solid #90caf9;">推荐设置（比赛）</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">model</td><td style="padding:5px;border:1px solid #e0e0e0;">要导出的模型</td><td style="padding:5px;border:1px solid #e0e0e0;">必须 <code>model.eval()</code> 后再传</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">args</td><td style="padding:5px;border:1px solid #e0e0e0;">示例输入（用于追踪计算图）</td><td style="padding:5px;border:1px solid #e0e0e0;">torch.randn(1,5,721,1440,4)</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">f</td><td style="padding:5px;border:1px solid #e0e0e0;">输出文件名</td><td style="padding:5px;border:1px solid #e0e0e0;">"pangu_weather.onnx"</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">opset_version</td><td style="padding:5px;border:1px solid #e0e0e0;">算子集版本</td><td style="padding:5px;border:1px solid #e0e0e0;"><strong>15 或更高</strong>（LayerNorm 支持）</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">input_names</td><td style="padding:5px;border:1px solid #e0e0e0;">输入张量的名字</td><td style="padding:5px;border:1px solid #e0e0e0;">['input']（后面推理时用这个名字）</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">output_names</td><td style="padding:5px;border:1px solid #e0e0e0;">输出张量的名字</td><td style="padding:5px;border:1px solid #e0e0e0;">['output']</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">dynamic_axes</td><td style="padding:5px;border:1px solid #e0e0e0;">声明哪些维度可变</td><td style="padding:5px;border:1px solid #e0e0e0;">不设（固定 shape 加速）</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">do_constant_folding</td><td style="padding:5px;border:1px solid #e0e0e0;">常量折叠优化</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>True</code>（默认，加速）</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">export_params</td><td style="padding:5px;border:1px solid #e0e0e0;">是否保存权重</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>True</code>（必须）</td></tr>
-      </table>
-
-      <p><strong>一个关键的注意点：model.eval()</strong></p>
-      <p>导出前必须调用 <code>model.eval()</code>。否则模型里的 Dropout 和 BatchNorm 处于"训练模式"，导出的 ONNX 中 Dropout 可能还在随机丢弃数据——推理时结果完全不一样。</p>
-
-      <h3>七、ONNX Runtime：组装好蓝图就开始盖楼</h3>
-      <p>ONNX Runtime（ORT）是微软开发的跨平台推理引擎。它读取 ONNX 文件，做以下几件事：</p>
-      <ol>
-        <li><strong>图优化（Graph Optimization）</strong>：自动融合算子、消除冗余节点、折叠常量——不需要手动做。</li>
-        <li><strong>选择合适的 Execution Provider</strong>：CPU、CUDA、TensorRT、DirectML、OpenVINO……ORT 自动调度到可用的硬件后端。</li>
-        <li><strong>执行推理：</strong>输入数据 → 前向计算 → 输出预测结果。</li>
-      </ol>
-
-      <p>ORT 的图优化包括三个级别：</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-级别 | 优化内容                  | 是否安全
-------|---------------------------|----------
-Basic | 常量折叠、Identity 消除     | ✅ 绝对安全
-Extended| 算子融合（如 Conv+BN→Conv）| ✅ 大部分安全
-Layout | 转置优化、NHWC 转换        | ⚠ 某些模型可能精度微差
-      </pre>
-      <p><strong>比赛中的意义：</strong>先用 ONNX Runtime (CPU) 验证导出的 ONNX 是否正确（参考精度对不对），再用国产推理引擎做高性能优化。ORT 是调试 ONNX 的"黄金标准"。</p>
-
-      <h3>八、Pangu-Weather 导出 ONNX 的四大常见坑</h3>
-
-      <p><b>🔴 坑1：LayerNorm 的 OpSet 版本</b></p>
-      <p>前面已经强调过：opset_version < 15 会导致 LayerNorm 被拆分成一堆 Add、Mul、Sub、Div、Sqrt。展开后约 15-20 个算子，推理引擎很难自动合并回去。</p>
-      <p><strong>对策：</strong>设置 opset_version=15 或 17。</p>
-
-      <p><b>🔴 坑2：动态 Shape 导致推理引擎不可优化</b></p>
-      <p>如果 H 和 W 的维度设成 dynamic，推理引擎的 Kernel 编译器（如 TensorRT）无法预先分配内存和选择最优 kernel。</p>
-      <p><strong>对策：</strong>固定所有非 batch 维度。先导杯评测输入大小固定，没必要用动态。</p>
-
-      <p><b>🔴 坑3：torch.split 和 torch.cat 的输出难以融合</b></p>
-      <p>PyTorch 中常用的 <code>torch.split</code> 和 <code>torch.cat</code> 在 ONNX 中会变成多个 Split/Cat 节点，通常成为融合的障碍。</p>
-      <p><strong>对策：</strong>尽量用 View/Reshape 替代 Split/Cat，或导出后手动用 onnxsim 优化。</p>
-
-      <p><b>🔴 坑4：3D 窗口 Attention 的 Gather 操作</b></p>
-      <p>Pangu-Weather 的 3D 窗口滑动在 ONNX 里会映射成 Gather + Reshape + Transpose 的复杂组合。如果不做图优化，这部分会成为推理瓶颈。</p>
-      <p><strong>对策：</strong>导出后先用 onnxsim 简化，再用 Netron（ONNX 可视化工具）查看计算图，确认 Gather 数量是否合理。</p>
-
-      <h3>九、核心概念速查表</h3>
-      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
-        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">概念</th><th style="padding:6px;border:1px solid #90caf9;">一句话</th><th style="padding:6px;border:1px solid #90caf9;">比赛中的意义</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX</td><td style="padding:5px;border:1px solid #e0e0e0;">深度学习框架的"通用语言"</td><td style="padding:5px;border:1px solid #e0e0e0;">PyTorch → 国产引擎的必经桥梁</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">OpSet 版本</td><td style="padding:5px;border:1px solid #e0e0e0;">算子标准的版本号</td><td style="padding:5px;border:1px solid #e0e0e0;">≥ 15 才能正常导出 LayerNorm</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">静态 Shape</td><td style="padding:5px;border:1px solid #e0e0e0;">所有维度固定</td><td style="padding:5px;border:1px solid #e0e0e0;">更快，比赛推荐</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">动态 Shape</td><td style="padding:5px;border:1px solid #e0e0e0;">某些维度运行时决定</td><td style="padding:5px;border:1px solid #e0e0e0;">灵活但慢 10-30%</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime</td><td style="padding:5px;border:1px solid #e0e0e0;">跨平台推理引擎</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX 验证的黄金标准</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">图优化</td><td style="padding:5px;border:1px solid #e0e0e0;">算子融合、常量折叠</td><td style="padding:5px;border:1px solid #e0e0e0;">自动加速，减少推理时间</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Netron</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX 可视化工具</td><td style="padding:5px;border:1px solid #e0e0e0;">调试导出问题的第一步</td></tr>
-      </table>
-
-      <h3>十、常见误区</h3>
-      <ul>
-        <li><b>ONNX 自己会做加速：</b>ONNX 只是文件格式。加速是 ONNX Runtime 等推理引擎做的。</li>
-        <li><b>OpSet 越高越好：</b>不一定。某些老牌国产引擎可能不支持最新的 OpSet。建议用 15-17 范围测试。</li>
-        <li><b>onnxsim 什么都能优化：</b>onnxsim 主要做常量折叠和 Identity 消除，不做 LayerNorm 融合。</li>
-        <li><b>ONNX 只能在 GPU 上跑：</b>ONNX Runtime 支持 CPU、CUDA、TensorRT、DirectML、OpenVINO、CoreML 等。国产 DTK 也可能覆盖 ONNX EP。</li>
-        <li><b>导出 ONNX 需要改模型代码：</b>大多数情况下不需要。torch.onnx.export() 自动追踪计算图。</li>
-      </ul>
+      <h3>三、动态 Shape vs 静态 Shape</h3>
+      <p>静态 Shape：导出时每个维度固定，推理引擎提前做深度优化。动态 Shape：某些维度运行时决定，灵活但性能损失 ~10-30%。比赛推荐固定 static shape。</p>
 
       <hr/>
-      <h3>📅 明日预告（第7天）：ONNX 计算图优化</h3>
-      <p>明天讲算子融合的原理（为什么 Mul+Add 可以合并为 Gemm？），onnxsim 的具体优化策略（常量折叠、Identity 消除、Dead Code Elimination），以及 Pangu-Weather LayerNorm 的拆分与手动融合实践。</p>
-      <p>前置知识：理解 ONNX 计算图的基本结构（即今天的内容）。</p>
+      <h3>📅 明日预告：ONNX 计算图优化</h3>
+      <p>明天讲算子融合的原理、onnxsim 的优化策略。</p>
       ]]></description>
     </item>
 
@@ -595,243 +251,216 @@ Layout | 转置优化、NHWC 转换        | ⚠ 某些模型可能精度微差
       <pubDate>2026-06-22 22:00:00 +0800</pubDate>
       <description><![CDATA[
       <h2>今日主题：ONNX 计算图优化</h2>
-      <p>昨天的文章介绍了 ONNX 的基本概念——它是模型从 PyTorch 到推理引擎的"通用桥梁"。今天我们要深入这座桥梁上<strong>最重要的改造工程</strong>：计算图优化。简单说就是<strong>把笨重的原始模型变轻巧</strong>，让推理跑得更快。</p>
+      <p>计算图优化就是把笨重的原始模型变轻巧，让推理跑得更快。核心手段是<strong>算子融合</strong>——把多个小计算合并为大计算，减少 Kernel Launch 和显存读写开销。</p>
 
-      <p>这篇文章不需要任何编译器知识。我们从"一张图"开始讲起。</p>
+      <h3>为何 Mul+Add 可以融合为 GEMM？</h3>
+      <p>矩阵乘法、加法、激活函数共享同一个循环结构——都是在遍历矩阵的每个元素做运算。编译器可以把它们打包进同一个循环，一次遍历就做完三件事。</p>
 
-      <h3>一、什么是计算图？为什么需要优化？</h3>
-      <p><strong>计算图（Computation Graph）</strong>：把模型的每一笔计算画成一张网。节点是"计算步骤"（如乘法、加法、取最大值），边是"数据流动"（前一步的结果传给下一步）。</p>
+      <h3>onnxsim 的三把刀</h3>
+      <ul>
+        <li><b>常量折叠：</b>把只依赖常量的计算提前算好，写死进模型文件</li>
+        <li><b>Identity 消除：</b>删除什么都不做的算子（Dropout/Cast/Squeeze）</li>
+        <li><b>死代码消除：</b>删除计算结果不被任何人使用的节点</li>
+      </ul>
 
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-原始 PyTorch 模型：
-  y = relu( matmul(x, W) + b )
-
-转成 ONNX 计算图后：
-  # 节点1: MatMul     输入: x, W  → 输出: temp1
-  # 节点2: Add        输入: temp1, b  → 输出: temp2
-  # 节点3: Relu       输入: temp2  → 输出: y
-      </pre>
-
-      <p>这三个节点就是三个<strong>独立的小步骤</strong>。在 GPU 上执行时，每个步骤都需要：</p>
-      <ol>
-        <li>启动一次 Kernel（GPU 上的计算函数）—— 启动一次消耗约 3-10 微秒</li>
-        <li>把中间结果（temp1, temp2）写到显存 —— 显存读写带宽有限，浪费时间</li>
-        <li>再读回来给下一步用 —— 白白增加延迟</li>
-      </ol>
-
-      <p><strong>比赛中的意义：</strong>Pangu-Weather 的一个完整前向推理包含数万个这样的节点。节点越多，Kernel Launch 和显存读写的开销就越大。计算图优化的核心目标就是<strong>减少节点数</strong>。</p>
+      <p><strong>比赛中的意义：</strong>运行 onnxsim 是在模型导出后最安全、收益最大的第一步优化。一条命令就能让模型节点数减少 20-40%。</p>
 
       <hr/>
-      <h3>二、算子融合：把三个小步骤合并成一步</h3>
+      <h3>📅 明日预告：异构计算与 GPU 内存模型</h3>
+      <p>明天深入 GPU 内部，从 Global Memory → Shared Memory → Register 的访问延迟差异讲起。</p>
+      ]]></description>
+    </item>
 
-      <p>前三天的学习里我们已经接触过很多操作了：矩阵乘法（MatMul）、加法（Add）、激活函数（Relu）。如果这三个操作紧挨着出现，能不能<strong>合并成一个</strong>？</p>
+    <item>
+      <title>第10天：国产智算生态与 DTK | 零基础精讲</title>
+      <link>https://aibook.ren/archives/ai-chip-selection</link>
+      <guid>weather-learning-day10-2026-06-25</guid>
+      <pubDate>2026-06-25 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+      <h2>今日主题：国产智算生态与 DTK</h2>
+      <p>前面9天我们学习了模型压缩（剪枝、量化、低秩分解）和部署工具链（ONNX、计算图优化、GPU 内存模型）。但一个关键问题一直悬而未决：<strong>比赛最终的推理部署是在什么硬件上跑？</strong></p>
+      <p>答案是：<strong>国产 AI 加速卡</strong>。先导杯要求选手在国产科学智算生态上完成推理部署优化。今天我们就来系统认识目前中国市场上的几大国产 AI 芯片生态，重点拆解海光 DCU 的 DTK 软件栈和 AMD ROCm/HIP 编程模型。</p>
 
-      <p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/operator-fusion.svg" alt="算子融合原理示意图" style="max-width:100%;border-radius:8px;"/></p>
+      <p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/domestic-ai-ecosystem.svg" alt="国产智算平台软件栈全景图" style="max-width:100%;border-radius:8px;"/></p>
 
-      <p>这张图展示了核心原理：左边是三个独立的 Kernel（Mul → Add → Relu），每步都要启动一次 GPU 函数并把中间结果写回显存。右边用<strong>一个 Fusion Kernel</strong> 完成全部计算，中间结果存在 GPU 的寄存器（最快的存储）里，不需要写显存。</p>
+      <h3>一、2026 年国产 AI 芯片格局</h3>
+      <p>截至2026年，国产 AI 加速卡市场份额已从 2023 年的不到 15% 跃升至约 41%，年出货量约 165 万张。主要玩家分四大阵营：</p>
 
-      <p><b>为什么 Mul+Add 可以融合为 GEMM？</b></p>
-      <p>GEMM 是"General Matrix Multiply"（通用矩阵乘法）的缩写。数学上：</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-原始公式：y = relu( matmul(x, W) + b )
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">芯片品牌</th><th style="padding:6px;border:1px solid #90caf9;">架构路线</th><th style="padding:6px;border:1px solid #90caf9;">代表性芯片</th><th style="padding:6px;border:1px solid #90caf9;">软件栈</th><th style="padding:6px;border:1px solid #90caf9;">迁移难度</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>华为昇腾</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">达芬奇自研架构</td><td style="padding:5px;border:1px solid #e0e0e0;">昇腾 910B（FP16~320 TFLOPS）</td><td style="padding:5px;border:1px solid #e0e0e0;">CANN + torch_npu</td><td style="padding:5px;border:1px solid #e0e0e0;">🔴 中高</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>海光 DCU</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">GPGPU（兼容 AMD ROCm）</td><td style="padding:5px;border:1px solid #e0e0e0;">深算 Z100（FP16~28 TFLOPS）</td><td style="padding:5px;border:1px solid #e0e0e0;">DTK（兼容 ROCm）</td><td style="padding:5px;border:1px solid #e0e0e0;">🟢 <strong>最低</strong></td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>寒武纪</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">自研指令集 MLU</td><td style="padding:5px;border:1px solid #e0e0e0;">思元 590（INT8~256 TOPS）</td><td style="padding:5px;border:1px solid #e0e0e0;">Neuware + MagicMind</td><td style="padding:5px;border:1px solid #e0e0e0;">🟡 中</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>摩尔线程</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">通用 GPU（MUSA）</td><td style="padding:5px;border:1px solid #e0e0e0;">MTT S5000</td><td style="padding:5px;border:1px solid #e0e0e0;">MUSA SDK</td><td style="padding:5px;border:1px solid #e0e0e0;">🟡 中</td></tr>
+      </table>
 
-数学等价变换：
-  matmul(x, W) → 得到中间矩阵 M
-  M + b        → 广播加法
-  relu(M + b)  → 逐元素取最大值
-
-融合后：y = relu( (x × W) + b )
-等价于一个操作：Y = max(0, xW + b)
-      </pre>
-      <p>矩阵乘法本身就是将权重 W 和输入 x 的每一行做乘加累加。而加法 b 只是按行再加一个偏置，Relu 只是把负数变成 0。这三个操作<strong>共享同一个循环结构</strong>——都是在遍历矩阵的每个元素做运算。编译器可以把它们<strong>打包进同一个循环</strong>，一次遍历就做完三件事。</p>
-
-      <p>这叫"循环融合"（Loop Fusion）——把三个循环合并成一个。</p>
-
-      <p><strong>比赛中的意义：</strong>Pangu-Weather 的每个 Transformer Block 里，典型的可融合模式包括：</p>
-      <ul>
-        <li><b>QKV 投影+偏置</b>：3 次 MatMul + 3 次 Add → 可融合为 3 个 GEMM</li>
-        <li><b>Attention 输出投影+偏置</b>：MatMul + Add → 融合为 GEMM</li>
-        <li><b>MLP 全连接+激活</b>：MatMul + Add + GELU → 可融合为一个算子</li>
-        <li><b>LayerNorm</b>：ReduceMean + Sub + Pow + Mean + Add + Sqrt + Div + Mul + Add → 可融合为一整个 LayerNorm Kernel</li>
-      </ul>
+      <p><strong>比赛中的意义：</strong>先导杯赛题通常指定一种国产芯片平台。了解各家的软件栈差异，决定了你的模型压缩和部署策略。海光 DCU 因为兼容 ROCm，如果你的团队有 CUDA 经验，迁移成本最低。</p>
 
       <hr/>
-      <h3>三、onnxsim 的三把刀</h3>
 
-      <p>onnxsim（ONNX Simplifier，也叫 onnx-simplifier）是大家最常用的 ONNX 图优化工具。它在导出 ONNX 之后运行，做三件核心的事：</p>
+      <h3>二、什么是 DTK？一个"穿了马甲的 ROCm"</h3>
 
-      <p><b>1. 常量折叠（Constant Folding）</b></p>
-      <p>模型里有些计算只依赖常量，不依赖输入。比如：</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# 优化前：每次推理都重复计算
-ones = [1.0, 1.0, 1.0, ...]  (一个全 1 张量)
-scale_factor = ones * (1.0 / sqrt(768.0))  ← 每次推理都算一遍除法
-  
-# 优化后：只算一次，把结果写死进 ONNX
-scale_factor = [0.036, 0.036, 0.036, ...]  ← 直接存成常量
-      </pre>
-      <p><strong>直觉类比：</strong>你每天出门前算一遍"今天星期几"→ 发现每天都一样 → 直接把"星期三"写在日历上。</p>
-      <p>具体的折叠类型包括：</p>
+      <p><strong>DTK = DCU Toolkit</strong>，是海光信息为 DCU（Deep Computing Unit，深度计算单元）开发的开放软件平台。它的核心设计理念是<strong>全面兼容 AMD ROCm 生态</strong>。</p>
+
+      <p>类比来理解：</p>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">概念</th><th style="padding:6px;border:1px solid #90caf9;">类比</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">CUDA</td><td style="padding:5px;border:1px solid #e0e0e0;">Windows 操作系统（闭源，NVIDIA 独占）</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">ROCm</td><td style="padding:5px;border:1px solid #e0e0e0;">Linux 操作系统（开源，AMD 主导）</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">DTK</td><td style="padding:5px;border:1px solid #e0e0e0;">国产 Linux 发行版（基于 Linux，加了海光自己的优化和驱动）</td></tr>
+      </table>
+
+      <p>DTK 包含的组件：</p>
       <ul>
-        <li>死常量（Shape 相关的常量）：如 <code>ones_like(x)</code> 中 x 的 shape 如果固定，可以直接展开</li>
-        <li>数学常量：如 Positional Encoding 中的三角函数值、GELU 中的常数系数</li>
-        <li>Reshape/Transpose 顺序调整：对固定 shape 直接算出变形后的索引映射</li>
+        <li><strong>HIP Runtime：</strong>兼容 CUDA Runtime API 的 C++ 运行时</li>
+        <li><strong>hipBLAS / rocBLAS：</strong>对标 cuBLAS 的 BLAS 库</li>
+        <li><strong>MIOpen：</strong>对标 cuDNN 的深度学习算子库</li>
+        <li><strong>RCCL：</strong>对标 NCCL 的多卡通信库</li>
+        <li><strong>rocFFT / rocSPARSE / rocThrust / rocPRIM：</strong>对标 cuFFT / cuSPARSE / Thrust / CUB</li>
+        <li><strong>hipify：</strong>自动将 CUDA 代码转换为 HIP 代码的工具</li>
       </ul>
 
-      <p><b>2. Identity 消除（Identity Elimination）</b></p>
-      <p>ONNX 里经常出现一些"什么都不做"的节点，比如：</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# 优化前：有一堆无用节点
-  x → Identity → Identity → Identity → y    ← 三个恒等节点
-  
-# 优化后：全部删掉
-  x → y
-      </pre>
-      <p>除了 Identity，还包括：</p>
-      <ul>
-        <li><b>Dropout</b>：推理模式下 Dropout 什么都不做，但导出时 PyTorch 可能还留着</li>
-        <li><b>Unsqueeze/Squeeze</b>：如果 shape 本来就不变，加维减维都是多余的</li>
-        <li><b>Cast（类型转换）</b>：如果转来转去回到同一类型，就可以消除</li>
-        <li><b>Slice（切片）</b>：如果切的范围跟原来一样，整个删除</li>
-      </ul>
-      <p><strong>直觉类比：</strong>文件里有一行注释写着"TODO: 不重要"，注释本身不影响功能，删掉让文件更清爽。</p>
+      <p><strong>比赛中的意义：</strong>DTK 的算子覆盖度已超过 99%（官方数据）。这意味着你从 PyTorch 导出的 ONNX 模型中的绝大多数算子，在 DTK 上都有对应的实现。但<strong>少数不覆盖的算子</strong>（如某些高级融合算子）需要你自己排查并用替代方案解决。</p>
 
-      <p><b>3. 死代码消除（Dead Code Elimination）</b></p>
-      <p>有些节点的计算结果<strong>从来没有被任何后续节点使用</strong>，这种节点就是"死代码"。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# 优化前
-x → Add → temp1 → Relu → y
-    |                ↑
-    + → Mul → temp2 ↑  ← 这个 Mul 的结果（temp2）
-        没被任何人用
-      
-# 优化后
-x → Add → Relu → y   ← 删掉 Mul 节点
-      </pre>
-      <p>这种情况的常见来源：</p>
-      <ul>
-        <li>训练时为了统计用的辅助输出（loss、activation stats 等），推理时没用</li>
-        <li>PyTorch autograd 保留下来的梯度计算分支</li>
-        <li>调试用的 print 节点</li>
-        <li>JIT trace 过程中遗留的中间变量</li>
-      </ul>
-      <p><strong>直觉类比：</strong>你买了一箱苹果，把坏掉的挑出来扔掉。但后来你发现坏苹果从来没被处理过——它们一直占着箱子里的空间。扔掉它们箱子就轻了。</p>
+      <hr/>
 
-      <p><strong>比赛中的意义：</strong>运行 onnxsim 是在模型导出后<strong>最安全、收益最大的第一步优化</strong>。一条命令就能让模型节点数减少 20-40%，对推理性能有直接好处。</p>
+      <h3>三、HIP：一个"通用 GPU 编程语言"</h3>
+
+      <p><strong>HIP（Heterogeneous-compute Interface for Portability）</strong>是 ROCm 生态的核心编程模型。你可以把它理解为一个"一次编写，AMD/NVIDIA 双平台运行"的 GPU 编程语言。</p>
+
+      <p>HIP 和 CUDA 的代码几乎一行对一行：</p>
+
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+| CUDA | HIP |
+|------|-----|
+| __global__ | __global__ |
+| blockIdx.x | hipBlockIdx_x |
+| threadIdx.x | hipThreadIdx_x |
+| cudaMalloc() | hipMalloc() |
+| cudaMemcpy() | hipMemcpy() |
+| cudaStream_t | hipStream_t |
+| nvcc 编译 | hipcc 编译 |
+      </pre>
+
+      <p>实际代码转换示例：</p>
+      <pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
+// === CUDA 版本 ===
+__global__ void vec_add(float *a, float *b, float *c, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx &lt; n) c[idx] = a[idx] + b[idx];
+}
+int main() {
+    float *d_a; cudaMalloc(&amp;d_a, n * sizeof(float));
+    cudaMemcpy(d_a, h_a, n * sizeof(float), cudaMemcpyHostToDevice);
+    vec_add&lt;&lt;&lt;grid, block&gt;&gt;&gt;(d_a, d_b, d_c, n);
+}
+
+// === HIP 版本 ===
+__global__ void vec_add(float *a, float *b, float *c, int n) {
+    int idx = hipBlockIdx_x * hipBlockDim_x + hipThreadIdx_x;
+    if (idx &lt; n) c[idx] = a[idx] + b[idx];
+}
+int main() {
+    float *d_a; hipMalloc(&amp;d_a, n * sizeof(float));
+    hipMemcpy(d_a, h_a, n * sizeof(float), hipMemcpyHostToDevice);
+    hipLaunchKernelGGL(vec_add, grid, block, 0, 0, d_a, d_b, d_c, n);
+}
+      </pre>
+
+      <p>看到区别了吗？只是前缀从 <code>cuda</code> 换成了 <code>hip</code>，block/thread 索引的写法略有不同。实际上，<strong>如果你不写自定义 Kernel</strong>（只使用 PyTorch 框架层），你甚至不需要碰 HIP 代码。</p>
+
+      <p><strong>比赛中的意义：</strong>大部分参赛者不需要手写 HIP Kernel。如果你只做"模型压缩→ONNX→部署"这条路径，你的代码改动量很小。只有在需要自定义高性能算子（如手动融合 LayerNorm）时才需要写 HIP。</p>
+
+      <hr/>
+
+      <h3>四、自动代码转换：hipify</h3>
+
+      <p>如果团队里有现成的 CUDA 代码（比如自定义的 Attention Kernel），海光提供了 <strong>hipify</strong> 工具可以自动将 CUDA 代码转换为 HIP 代码。</p>
 
       <pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
-# 一行命令完成所有优化
-python -m onnxsim input.onnx output.onnx
+# 扫描整个目录的 CUDA 代码，显示转换统计
+hipify-perl --inplace my_cuda_project/
 
-# 输出会显示：简化前 N 个节点 → 简化后 M 个节点
+# 或者用脚本批量转换整个目录
+hipconvertinplace-perl.sh MY_SRC_DIR
       </pre>
 
-      <hr/>
-      <h3>四、ORT 的图优化级别——更深层的融合</h3>
-
-      <p>onnxsim 做完"表面清理"后，还有更深层的优化——由 ONNX Runtime（ORT）在执行时完成。ORT 把图优化分成三个等级：</p>
-
-      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
-        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">级别</th><th style="padding:6px;border:1px solid #90caf9;">做什么</th><th style="padding:6px;border:1px solid #90caf9;">安全吗</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>Basic（基础）</b></td><td style="padding:5px;border:1px solid #e0e0e0;">常量折叠 + Identity 消除 + 简单的算子融合（如 Conv+Add）</td><td style="padding:5px;border:1px solid #e0e0e0;">✅ 绝对安全</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>Extended（扩展）</b></td><td style="padding:5px;border:1px solid #e0e0e0;">复杂的算子融合：LayerNorm Fusion、Attention Fusion、GEMM+Activation Fusion</td><td style="padding:5px;border:1px solid #e0e0e0;">✅ 大部分安全</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>Layout（布局）</b></td><td style="padding:5px;border:1px solid #e0e0e0;">调整数据排布格式（如 NCHW → NCHWc），只对 CPU 有用</td><td style="padding:5px;border:1px solid #e0e0e0;">⚠ 某些模型精度微差</td></tr>
-      </table>
-
-      <p>ORT 默认开启全部三个级别。Extended 级别对 Pangu-Weather 最重要的融合包括：</p>
-      <ul>
-        <li><b>Layer Normalization Fusion</b>：把 LayerNorm 的 9+ 个小算子合并为 1 个，速度提升约 2-3 倍（对这一层而言）</li>
-        <li><b>GEMM Activation Fusion</b>：把 MatMul + Add + Relu/GELU 合并为一个 GEMM 调用</li>
-        <li><b>Attention Fusion</b>：把 QKV 投影 + Attention Score + Softmax + 加权求和 合并为一个 Attention Kernel</li>
-      </ul>
+      <p><strong>比赛中的意义：</strong>如果你们团队之前为 Pangu-Weather 写了自定义 CUDA Kernel，用 hipify 可以一键转换为 HIP，大大节省移植时间。</p>
 
       <hr/>
-      <h3>五、哪些算子难以自动融合？（比赛实战坑）</h3>
 
-      <p>不是所有算子都能被推理引擎自动融合。以下三类是"融合杀手"：</p>
+      <h3>五、在国产卡上部署 Pangu-Weather 的标准流程</h3>
 
-      <p><b>1️⃣ torch.split / torch.cat</b></p>
-      <p>PyTorch 里经常用 split 把一个张量分成几块（比如把 QKV 拆开），再用 cat 拼回去。</p>
+      <p>路线图（从 PyTorch 到国产推理）：</p>
+
       <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# PyTorch 代码（看起来很简洁）
-Q, K, V = torch.split(x, d_h, dim=-1)   # 拆成三段
-output = torch.cat([Q_attn, K_attn, V_attn], dim=-1)  # 拼回去
-
-# ONNX 导出后变成
-Split → [Slice1, Slice2, Slice3]  → [各自处理] → Concat
-# 推理引擎很难把上面这些 Slice 合并——它们依赖运行时索引
+Step 1: 在 NVIDIA GPU 上开发和验证模型
+  PyTorch 训练 / 加载预训练权重
+  ↓
+Step 2: 模型压缩（剪枝 + 量化）
+  结构化剪枝（TorchPruning）→ PTQ/SmoothQuant
+  ↓
+Step 3: 导出 ONNX（opset ≥ 15）
+  torch.onnx.export() → onnxsim 简化
+  ↓
+Step 4: ONNX Runtime 验证精度
+  确保 ONNX 推理结果与 PyTorch 对齐
+  ↓
+Step 5: 移植到国产环境
+  方案 A：ONNX Runtime ROCm EP（如果国产卡支持 ORT）
+  方案 B：用国产推理引擎直接加载 ONNX
+  方案 C：转成国产框架格式（如 CANN 的 .om）
+  ↓
+Step 6: 国产卡上 Benchmark + 调优
+  Latency / Throughput / 显存测量 → 针对性优化
       </pre>
-      <p><strong>问题：</strong>Split 和 Cat 生成的数据<strong>在内存中不连续</strong>，推理引擎无法用一条 GEMM 指令处理，必须做多次 Gather/Scatter 操作。</p>
-      <p><strong>比赛中的对策：</strong></p>
-      <ul>
-        <li>如果可能，用 View / Reshape 代替 Split/Cat——保持内存连续性</li>
-        <li>如果必须用 Split/Cat，导出后用 Netron 可视化确认它们是否被融合</li>
-      </ul>
 
-      <p><b>2️⃣ 连续的 permute + reshape</b></p>
-      <pre style="background:#f5f5f5;padding:10px;padding:10px;border-radius:6px;font-size:13px;">
-x = x.permute(0, 2, 1, 3)  # 重排维度顺序
-x = x.reshape(B, H, N, -1)  # 改变形状
-      </pre>
-      <p>在普通 GPU 推理中，permute 需要<strong>重新排列内存布局</strong>（不是简单地修改元数据）。连续的 permute + reshape 会让推理引擎做大量<strong>显存拷贝</strong>，不能和相邻的 MatMul 融合。</p>
-      <p><strong>比赛中的对策：</strong>尽量把维度顺序设计成<strong>一开始就正确</strong>，避免导出后再做多次转置。</p>
-
-      <p><b>3️⃣ 自定义 / 非标准激活函数</b></p>
-      <p>Pangu-Weather 的激活函数是 GELU。如果 PyTorch 导出时 GELU 被展开为多个小算子（如 erf + Mul 等），ONNX 里就变成一堆独立节点，推理引擎可能无法识别并重新融合回去。</p>
-      <p><strong>比赛中的对策：</strong>使用 opset ≥ 15 可以让很多高级算子保持一体。如果国产引擎不支持 ONNX 原生 GELU 算子，可能需要自己写一个融合 Kernel。</p>
+      <p><strong>比赛中的意义：</strong>Step 1-4 都是在普通 GPU 上完成的，只有 Step 5-6 需要国产环境。这意味着大部分开发工作可以在自己的 GPU 上做，最后才部署到国产卡上验证。</p>
 
       <hr/>
-      <h3>六、一张表看懂 ONNX 图优化全流程</h3>
 
-      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
-        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">步骤</th><th style="padding:6px;border:1px solid #90caf9;">工具/阶段</th><th style="padding:6px;border:1px solid #90caf9;">做什么</th><th style="padding:6px;border:1px solid #90caf9;">节点减少效果</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">① 导出</td><td style="padding:5px;border:1px solid #e0e0e0;">torch.onnx.export</td><td style="padding:5px;border:1px solid #e0e0e0;">do_constant_folding=True</td><td style="padding:5px;border:1px solid #e0e0e0;">~10%</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">② 简化</td><td style="padding:5px;border:1px solid #e0e0e0;">onnxsim</td><td style="padding:5px;border:1px solid #e0e0e0;">常量折叠 + Identity 消除 + 死代码消除</td><td style="padding:5px;border:1px solid #e0e0e0;">~20-40%</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">③ ORT Basic</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime</td><td style="padding:5px;border:1px solid #e0e0e0;">简单的算子融合</td><td style="padding:5px;border:1px solid #e0e0e0;">~5-10%</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">④ ORT Extended</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime</td><td style="padding:5px;border:1px solid #e0e0e0;">LayerNorm/Attention/Gemm+Act 融合</td><td style="padding:5px;border:1px solid #e0e0e0;">~30-50%</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">⑤ 引擎优化</td><td style="padding:5px;border:1px solid #e0e0e0;">国产推理引擎</td><td style="padding:5px;border:1px solid #e0e0e0;">自定义 Kernel + 内存池</td><td style="padding:5px;border:1px solid #e0e0e0;">延迟大幅下降</td></tr>
-      </table>
+      <h3>六、三大常见兼容性坑</h3>
+
+      <p><b>🔴 坑1：算子兼容性</b></p>
+      <p>国产卡的算子库（如 MIOpen）通常覆盖了主流算子（Conv、MatMul、Softmax、LayerNorm），但<strong>高级融合算子</strong>（如 FlashAttention、FusedLayerNorm 的特定变体）可能缺失。</p>
+      <p><strong>对策：</strong>导出 ONNX 后用 onnxsim 拆散融合算子，让推理引擎用基础算子组合实现。虽然性能略低，但至少能跑通。</p>
+
+      <p><b>🔴 坑2：精度差异</b></p>
+      <p>不同芯片的 FP16 和 INT8 算术单元的实现方式不同，可能导致相同模型在不同卡上输出有微小差异（通常在 1e-3 ~ 1e-5 量级）。</p>
+      <p><strong>对策：</strong>在验证阶段用 RMSE/ACC 指标对比国产卡和 NVIDIA 卡的输出，确保差异在可接受范围。</p>
+
+      <p><b>🔴 坑3：PyTorch 版本依赖</b></p>
+      <p>海光 DCU 上必须使用海光适配版的 PyTorch（通常预装在 DTK 容器镜像中）。不要随便 <code>pip install torch</code>——这会覆盖适配版本，导致硬件无法识别。</p>
+      <p><strong>对策：</strong>使用官方 DTK Docker 镜像，禁止在容器内安装非官方指定的 PyTorch 版本。</p>
 
       <hr/>
+
       <h3>七、核心概念速查表</h3>
 
       <table style="border-collapse:collapse;width:100%;margin:8px 0;">
         <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">概念</th><th style="padding:6px;border:1px solid #90caf9;">一句话解释</th><th style="padding:6px;border:1px solid #90caf9;">比赛中的意义</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">算子融合</td><td style="padding:5px;border:1px solid #e0e0e0;">将多个小计算合并为大计算，减少启动和访存次数</td><td style="padding:5px;border:1px solid #e0e0e0;">推理延迟降低 20-50% 的核心手段</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">常量折叠</td><td style="padding:5px;border:1px solid #e0e0e0;">把只依赖常量的计算提前算好，写死进模型文件</td><td style="padding:5px;border:1px solid #e0e0e0;">减少推理时的冗余计算</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Identity 消除</td><td style="padding:5px;border:1px solid #e0e0e0;">删除什么都不做的算子（Dropout/Cast/Squeeze）</td><td style="padding:5px;border:1px solid #e0e0e0;">清理推理时不用的训练痕迹</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">死代码消除</td><td style="padding:5px;border:1px solid #e0e0e0;">删除计算结果不被任何人使用的节点</td><td style="padding:5px;border:1px solid #e0e0e0;">去掉无用分支，减少显存占用</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">GEMM</td><td style="padding:5px;border:1px solid #e0e0e0;">通用矩阵乘法，可融合偏置和激活</td><td style="padding:5px;border:1px solid #e0e0e0;">推理引擎里最核心的高性能算子</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Fusion Kernel</td><td style="padding:5px;border:1px solid #e0e0e0;">手动或自动编写的融合后 GPU 函数</td><td style="padding:5px;border:1px solid #e0e0e0;">先用 onnxsim + ORT 自动化，极限优化可手动写</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">Split/Cat 问题</td><td style="padding:5px;border:1px solid #e0e0e0;">PyTorch 里方便的切分操作，导出后难以融合</td><td style="padding:5px;border:1px solid #e0e0e0;">设计推理图时尽量用 View/Reshape 替代</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">DTK</td><td style="padding:5px;border:1px solid #e0e0e0;">海光 DCU 的软件栈，兼容 ROCm 生态</td><td style="padding:5px;border:1px solid #e0e0e0;">CUDA 团队迁移成本最低的国产方案</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">ROCm</td><td style="padding:5px;border:1px solid #e0e0e0;">AMD 开源的 GPU 计算平台，HIP 编程模型</td><td style="padding:5px;border:1px solid #e0e0e0;">DTK 的底层技术，理解它就能理解 DTK</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">HIP</td><td style="padding:5px;border:1px solid #e0e0e0;">CUDA 的"翻译器"，一套代码跑 AMD/NVIDIA</td><td style="padding:5px;border:1px solid #e0e0e0;">不写自定义 Kernel 就不需要学</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">hipify</td><td style="padding:5px;border:1px solid #e0e0e0;">自动把 CUDA 代码变成 HIP 代码的工具</td><td style="padding:5px;border:1px solid #e0e0e0;">有现成 CUDA Kernel 时一键迁移</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">CANN</td><td style="padding:5px;border:1px solid #e0e0e0;">华为昇腾的计算平台</td><td style="padding:5px;border:1px solid #e0e0e0;">昇腾路线的主力软件栈</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">MIOpen</td><td style="padding:5px;border:1px solid #e0e0e0;">对标 cuDNN 的深度学习算子库</td><td style="padding:5px;border:1px solid #e0e0e0;">算子覆盖度决定"能不能跑起来"</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">RCCL</td><td style="padding:5px;border:1px solid #e0e0e0;">对标 NCCL 的多卡通信库</td><td style="padding:5px;border:1px solid #e0e0e0;">多卡推理/训练时必需的通信基座</td></tr>
       </table>
 
-      <hr/>
-      <h3>八、算子融合的代价：为什么不全部融合？</h3>
-
-      <p>既然融合这么好，为什么不把整个模型融合成一个超级 Kernel？</p>
-      <p>三个现实限制：</p>
-      <ol>
-        <li><b>寄存器资源有限</b>：GPU 的寄存器数量很少（每个 CUDA 线程最多 255 个）。一个大融合 Kernel 可能把所有中间变量压在寄存器里，导致寄存器溢出（spill）到显存，反而变慢。</li>
-        <li><b>Occupancy 下降</b>：Kernel 越大、每个线程用的资源越多，同一时间能并行运行的线程就越少。极端情况下，融合后的 Kernel 并行度不够，延迟不降反升。</li>
-        <li><b>计算形状不确定性</b>：如果某一步的 tensor shape 动态变化（例如非平凡的条件分支），编译器无法提前决定最优的融合策略。</li>
-      </ol>
-      <p><strong>比赛中的意义：</strong>不要追求"全部融合"。先用 onnxsim 和 ORT 做自动化融合，如果某个中间结果频繁读写（如 LayerNorm 的中间变量），再考虑手动写 Fusion Kernel。</p>
-
-      <hr/>
-      <h3>九、常见误区</h3>
+      <h3>八、常见误区</h3>
       <ul>
-        <li><b>onnxsim 什么都能优化</b>：onnxsim 擅长常量折叠和 Identity 消除，但<strong>不擅长</strong>做层级的算子融合（如 LayerNorm 融合）。那种融合需要 ORT Extended 级别或手动写代码。</li>
-        <li><b>融合一定比不融合快</b>：不一定。如上面说的，资源竞争时融合可能反而不利。需要实测验证。</li>
-        <li><b>导出的 ONNX 直接能用最优性能</b>：不，刚导出的 ONNX 是"原始图"，必须经过 onnxsim 和 ORT 优化后才能用。</li>
-        <li><b>国产引擎会做和 ORT 一样的融合</b>：不一定。国产引擎的算子库覆盖度不同，可能缺少 Attention/LayerNorm 等高阶融合。需要单独验证。</li>
-        <li><b>INT8 模型不需要算子融合</b>：相反——INT8 模型的算子融合更关键，因为 INT8 每个元素占的空间小，减少中间显存读写的收益更大。</li>
+        <li><b>DTK = 另一个 CUDA：</b>DTK 兼容 ROCm，而 ROCm 兼容 CUDA API，但不是"另一个 CUDA"。它有自己的编译器（hipcc）和生态库。</li>
+        <li><b>国产卡性能一定比 NVIDIA 差：</b>昇腾 910B 的 FP16 算力已达 ~320 TFLOPS，接近 A100，但在生态成熟度和工具链上仍有差距。</li>
+        <li><b>ONNX 在国产卡上直接能跑：</b>不一定。国产推理引擎可能不支持 ONNX Runtime 的某些 Execution Provider，需要先验证。</li>
+        <li><b>hipify 能 100% 自动转换：</b>不能。hipify 能处理 ~90% 的常见 CUDA 语法，但高级用法（如动态并行、cuBLAS handle 管理）需要手动调整。</li>
+        <li><b>模型压缩后就不需要关心国产卡了：</b>恰恰相反——不同国产卡的算子库覆盖不同，剪枝/量化后的模型结构变化可能触发某些国产卡不支持的算子变体。</li>
       </ul>
 
       <hr/>
-      <h3>📅 明日预告（第8天）：异构计算与 GPU 内存模型</h3>
-      <p>明天深入 GPU 内部，从 Global Memory → Shared Memory → Register 的访问延迟差异讲起，解释 Cache Line、Memory Coalescing（连续地址读取原理）、Occupancy 的三重限制以及它们如何在气象模型推理中发挥作用。</p>
-      <p>前置知识：了解 GPU 和 CPU 是两种不同的芯片即可。</p>
+      <h3>📅 明日预告（第11天）：气象指标与精度验证</h3>
+      <p>明天开始进入第三阶段，从理论走向实验设计。首先学习气象领域的核心评价指标：RMSE 和 ACC（Anomaly Correlation Coefficient）的数学公式、物理含义、以及为什么需要按纬度加权的面积平均。</p>
+      <p>前置知识：会看平均值公式即可。</p>
       ]]></description>
     </item>
 
