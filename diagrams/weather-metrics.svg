@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 620" style="background:#0d1117;border-radius:12px;font-family:'Segoe UI',Arial,sans-serif;">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#16213e;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="rmse" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" style="stop-color:#e74c3c;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#c0392b;stop-opacity:0.05"/>
+    </linearGradient>
+    <linearGradient id="acc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" style="stop-color:#2ecc71;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#27ae60;stop-opacity:0.05"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <rect width="850" height="620" fill="url(#grad1)" rx="12"/>
+
+  <!-- Title -->
+  <text x="425" y="38" text-anchor="middle" fill="#e6edf3" font-size="20" font-weight="bold">气象模型评估指标全景图</text>
+  <line x1="150" y1="48" x2="700" y2="48" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Left: RMSE 区块 -->
+  <rect x="30" y="65" width="380" height="260" rx="10" fill="url(#rmse)" stroke="#e74c3c" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="220" y="95" text-anchor="middle" fill="#e74c3c" font-size="17" font-weight="bold">🔥 RMSE — 均方根误差</text>
+
+  <!-- 公式 -->
+  <rect x="55" y="108" width="330" height="80" rx="6" fill="#1a1a2e" stroke="#30363d" stroke-width="1"/>
+  <text x="220" y="130" text-anchor="middle" fill="#e6edf3" font-size="13" font-family="monospace">RMSE = √( (1/N) · Σ(pred − obs)² )</text>
+
+  <!-- 图解：箭头表示差值 -->
+  <line x1="80" y1="150" x2="100" y2="150" stroke="#e74c3c" stroke-width="2" marker-end="url(#arrow)"/>
+  <circle cx="90" cy="148" r="3" fill="#f1c40f"/>
+  <line x1="220" y1="150" x2="240" y2="150" stroke="#e74c3c" stroke-width="2"/>
+  <circle cx="230" cy="148" r="3" fill="#3498db"/>
+  <text x="160" y="168" text-anchor="middle" fill="#8b949e" font-size="11">差值 (pred − obs)，平方后求平均再开根</text>
+
+  <!-- 关键点 -->
+  <text x="55" y="202" fill="#f1c40f" font-size="12" font-weight="bold">●</text>
+  <text x="68" y="202" fill="#c9d1d9" font-size="12">衡量预报值与真实值的绝对误差大小</text>
+  <text x="55" y="220" fill="#f1c40f" font-size="12" font-weight="bold">●</text>
+  <text x="68" y="220" fill="#c9d1d9" font-size="12">单位与变量物理单位一致（如 m/s, K）</text>
+  <text x="55" y="238" fill="#f1c40f" font-size="12" font-weight="bold">●</text>
+  <text x="68" y="238" fill="#c9d1d9" font-size="12">完美预报：RMSE = 0；越接近 0 越好</text>
+  <text x="55" y="256" fill="#f1c40f" font-size="12" font-weight="bold">●</text>
+  <text x="68" y="256" fill="#c9d1d9" font-size="12">对离群值敏感（平方放大效应）</text>
+  <text x="55" y="274" fill="#f1c40f" font-size="12" font-weight="bold">●</text>
+  <text x="68" y="274" fill="#c9d1d9" font-size="12">数值本身 ≠ 模型好坏，需对比 baseline</text>
+
+  <!-- 解释："越小越好" -->
+  <rect x="55" y="290" width="330" height="28" rx="6" fill="#e74c3c" fill-opacity="0.15" stroke="#e74c3c" stroke-width="0.8"/>
+  <text x="220" y="309" text-anchor="middle" fill="#e74c3c" font-size="12">⬇ RMSE 越小 = 预报越准</text>
+
+  <!-- Right: ACC 区块 -->
+  <rect x="440" y="65" width="380" height="260" rx="10" fill="url(#acc)" stroke="#2ecc71" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="630" y="95" text-anchor="middle" fill="#2ecc71" font-size="17" font-weight="bold">📊 ACC — 距平相关系数</text>
+
+  <!-- 公式 -->
+  <rect x="465" y="108" width="330" height="95" rx="6" fill="#1a1a2e" stroke="#30363d" stroke-width="1"/>
+  <text x="630" y="130" text-anchor="middle" fill="#e6edf3" font-size="12" font-family="monospace">ACC =</text>
+  <text x="630" y="148" text-anchor="middle" fill="#f1c40f" font-size="14" font-family="monospace">Σ(F′·O′)</text>
+  <text x="630" y="156" text-anchor="middle" fill="#8b949e" font-size="11">──────────────</text>
+  <text x="630" y="175" text-anchor="middle" fill="#f1c40f" font-size="14" font-family="monospace">√( Σ(F′)² · Σ(O′)² )</text>
+  <text x="630" y="198" text-anchor="middle" fill="#8b949e" font-size="11">F′ = pred − climatology（距平）</text>
+
+  <!-- 关键点 -->
+  <text x="465" y="220" fill="#f1c40f" font-size="12" font-weight="bold">●</text>
+  <text x="478" y="220" fill="#c9d1d9" font-size="12">衡量预报空间模式的相似度，不是绝对误差</text>
+  <text x="465" y="238" fill="#f1c40f" font-size="12" font-weight="bold">●</text>
+  <text x="478" y="238" fill="#c9d1d9" font-size="12">范围：−1 到 1，1 = 完美捕捉气象模式</text>
+  <text x="465" y="256" fill="#f1c40f" font-size="12" font-weight="bold">●</text>
+  <text x="478" y="256" fill="#c9d1d9" font-size="12">行业标准：ACC &gt; 0.6 = 有技能，&gt; 0.8 = 高技巧</text>
+  <text x="465" y="274" fill="#f1c40f" font-size="12" font-weight="bold">●</text>
+  <text x="478" y="274" fill="#c9d1d9" font-size="12">对系统偏差不敏感（减去了气候态）</text>
+
+  <!-- 解释："越大越好" -->
+  <rect x="465" y="290" width="330" height="28" rx="6" fill="#2ecc71" fill-opacity="0.15" stroke="#2ecc71" stroke-width="0.8"/>
+  <text x="630" y="309" text-anchor="middle" fill="#2ecc71" font-size="12">⬆ ACC 越接近 1 = 预报空间模式越准</text>
+
+  <!-- Bottom: 关键气象变量及其重要性 -->
+  <rect x="30" y="345" width="790" height="135" rx="10" fill="#1a1a3e" stroke="#30363d" stroke-width="1" filter="url(#shadow)"/>
+  <text x="425" y="372" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="bold">🔑 关键气象变量与评估重要性</text>
+
+  <!-- 变量表 -->
+  <rect x="50" y="385" width="145" height="82" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="0.8"/>
+  <text x="122" y="405" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="bold">Z500</text>
+  <text x="122" y="420" text-anchor="middle" fill="#8b949e" font-size="10">500hPa 位势高度</text>
+  <text x="122" y="437" text-anchor="middle" fill="#58a6ff" font-size="10">🏆 核心变量</text>
+  <text x="122" y="454" text-anchor="middle" fill="#8b949e" font-size="10">中高层环流指标</text>
+
+  <rect x="205" y="385" width="145" height="82" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="0.8"/>
+  <text x="277" y="405" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="bold">T850</text>
+  <text x="277" y="420" text-anchor="middle" fill="#8b949e" font-size="10">850hPa 温度</text>
+  <text x="277" y="437" text-anchor="middle" fill="#58a6ff" font-size="10">🥇 高权重</text>
+  <text x="277" y="454" text-anchor="middle" fill="#8b949e" font-size="10">低层温度变化指标</text>
+
+  <rect x="360" y="385" width="145" height="82" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="0.8"/>
+  <text x="432" y="405" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="bold">T2M</text>
+  <text x="432" y="420" text-anchor="middle" fill="#8b949e" font-size="10">2米气温</text>
+  <text x="432" y="437" text-anchor="middle" fill="#58a6ff" font-size="10">🥈 中权重</text>
+  <text x="432" y="454" text-anchor="middle" fill="#8b949e" font-size="10">地表温度指标</text>
+
+  <rect x="515" y="385" width="145" height="82" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="0.8"/>
+  <text x="587" y="405" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="bold">U10</text>
+  <text x="587" y="420" text-anchor="middle" fill="#8b949e" font-size="10">10米纬向风</text>
+  <text x="587" y="437" text-anchor="middle" fill="#58a6ff" font-size="10">🥈 中权重</text>
+  <text x="587" y="454" text-anchor="middle" fill="#8b949e" font-size="10">近地面风场指标</text>
+
+  <rect x="670" y="385" width="135" height="82" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="0.8"/>
+  <text x="737" y="405" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="bold">MSLP</text>
+  <text x="737" y="420" text-anchor="middle" fill="#8b949e" font-size="10">海平面气压</text>
+  <text x="737" y="437" text-anchor="middle" fill="#58a6ff" font-size="10">🥈 中权重</text>
+  <text x="737" y="454" text-anchor="middle" fill="#8b949e" font-size="10">地面天气系统</text>
+
+  <!-- Bottom: 面积加权说明 -->
+  <rect x="30" y="495" width="790" height="110" rx="10" fill="#16213e" stroke="#30363d" stroke-width="1" filter="url(#shadow)"/>
+  <text x="425" y="520" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="bold">🌍 纬度加权平均（Latitude‑Weighted Average）</text>
+  <text x="55" y="543" fill="#c9d1d9" font-size="12">🌐 地球不是平的：赤道附近的网格面积 ≈ 极地网格面积的 2 倍（同样经距和纬距）</text>
+  <text x="55" y="563" fill="#c9d1d9" font-size="12">⚖ 加权公式：加权平均 = Σ( value(i,j) · cos(lat_j) ) / Σ( cos(lat_j) )</text>
+  <text x="55" y="583" fill="#f1c40f" font-size="12">🏆 比赛意义：如果不用面积加权，极地的误差会被严重压低，赤道的误差被放大，导致精度评价失真</text>
+</svg>

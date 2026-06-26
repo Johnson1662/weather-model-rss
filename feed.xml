@@ -464,5 +464,316 @@ Step 6: 国产卡上 Benchmark + 调优
       ]]></description>
     </item>
 
+    <item>
+      <title>第11天：气象指标与精度验证 | 零基础精讲</title>
+      <link>https://climpred.readthedocs.io/en/v1.2.1/metrics.html</link>
+      <guid>weather-learning-day11-2026-06-26</guid>
+      <pubDate>2026-06-26 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+<h2>今日主题：气象指标与精度验证 — 从零讲懂 RMSE、ACC 和纬度加权</h2>
+
+<p>前面 10 天我们已经学习了模型压缩（剪枝、量化、低秩分解）、部署工具链（ONNX、计算图优化、GPU 内存模型）和国产智算生态。从今天开始进入比赛的第三阶段——<strong>精度-速度权衡</strong>。</p>
+
+<p>一个关键问题一直没回答：<strong>模型被剪枝、量化之后，预报质量到底变差了多少？</strong></p>
+
+<p>答案是：用气象领域的两大核心指标——<strong>RMSE</strong> 和 <strong>ACC</strong> 来衡量。今天就从零基础讲明白：这两个看似复杂的指标到底是什么、怎么算、在比赛里怎么用。</p>
+
+<hr/>
+
+<h3>一、从一把尺子说起</h3>
+
+<p>想象你在参加一场天气预报比赛。</p>
+<p>你预报"明天下午 2 点，北京气温 25°C"，而第二天实际是 27°C。<strong>你的预报错了 2°C。</strong></p>
+<p>问题来了：</p>
+<ul>
+  <li>如果你错了 2°C，队友错了 5°C，你比他好多少？</li>
+  <li>如果你把气温报准了但把气压报偏了 10hPa，哪个更严重？</li>
+  <li>模型压缩后，预报"大致的冷暖趋势"还在，但"精确的温度数字"偏了。这算不算好模型？</li>
+</ul>
+
+<p>这就需要<strong>标准化评价指标</strong>——就像考试里的分数，让大家在同一个尺度下比较。</p>
+
+<p>气象大模型论文中最常用的两个指标是：</p>
+<ol>
+  <li><strong>RMSE</strong>（Root Mean Square Error，均方根误差）—— 看"数字算得有多准"</li>
+  <li><strong>ACC</strong>（Anomaly Correlation Coefficient，距平相关系数）—— 看"空间模式画得有多像"</li>
+</ol>
+
+<p>再加上一个辅助指标 <strong>MAE</strong>（Mean Absolute Error，平均绝对误差）。</p>
+
+<p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/weather-metrics.svg" alt="气象模型评估指标全景图" style="max-width:100%;border-radius:8px;margin:10px 0;"/></p>
+
+<hr/>
+
+<h3>二、RMSE：看"数字算得有多准"</h3>
+
+<h4>2.1 从"平均误差"开始理解</h4>
+
+<p>假设你在 100 个地点预报了温度。每个地点都有一个"预报值"和一个"实际值"。</p>
+<p>怎么衡量整体准确度？第一个想法：把每个地点的<strong>预报−实际</strong>求平均。</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+地点  预报  实际  差值
+ A    25    27    −2°C
+ B    30    28    +2°C
+ C    20    22    −2°C
+ D    25    23    +2°C
+────────────────────────
+平均误差 = (−2+2−2+2)/4 = 0°C
+</pre>
+
+<p>哎？平均误差是 0——"完全准确"！但这显然不对，因为每个地点都偏了 2°C，只是正负抵消了。</p>
+
+<p><strong>所以不能用"原始差值"的平均。</strong></p>
+
+<h4>2.2 平方：把正负号丢掉</h4>
+
+<p>解决方法是先把每个差值<strong>平方</strong>（正数就变不回来了），再求平均，最后再<strong>开平方根</strong>，把单位拉回到原来的物理尺度。</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+RMSE = √( (1/N) × Σ (pred_i − obs_i)² )
+
+对上面的例子：
+差值： −2, +2, −2, +2
+平方：  4,  4,  4,  4
+平均： (4+4+4+4)/4 = 4
+开根： √4 = 2°C   ← 这就是 RMSE
+</pre>
+
+<div style="background:#fff3cd;padding:10px;border-radius:6px;border-left:4px solid #ffc107;margin:8px 0;">
+<strong>💡 大白话：</strong>RMSE 把所有预报误差"先平方再开根"，这样就既不会正负抵消，又保持单位不变。RMSE = 0 代表预报完全准确。
+</div>
+
+<h4>2.3 RMSE 的物理含义</h4>
+
+<ul>
+  <li><strong>单位与原变量一致</strong>：温度 RMSE 单位是 K（开尔文），风速 RMSE 单位是 m/s</li>
+  <li><strong>对离群值非常敏感</strong>：如果你在 99 个地点报得很准，但在一个地点偏了 20°C，RMSE 会被这一个错误严重拉高（因为平方效应）</li>
+  <li><strong>不能直接说"好"或"坏"</strong>：RMSE 值要看变量本身的量级。温度 RMSE 2°C 算不错，但风速 RMSE 2 m/s 可能很差。需要和 baseline（基线模型，如 ECMWF 的数值预报）对比</li>
+</ul>
+
+<h4>2.4 比赛中的意义</h4>
+<p>当你对 Pangu-Weather 做了剪枝/量化后，<strong>RMSE 的变化是最直观的"精度损失信号"</strong>。如果剪枝前 RMSE=1.2K，剪枝后 RMSE 变成 1.5K，那说明精度下降了 0.3K。比赛评委会看：你压缩了多少参数量/提速了多少，对应的 RMSE 损失在多少——这就是"精度-速度权衡"。<strong>一般要求压缩后 RMSE 上升不超过 baseline 的 5-10%。</strong></p>
+
+<hr/>
+
+<h3>三、MAE：更"公平"的助手</h3>
+
+<p><strong>MAE</strong>（Mean Absolute Error，平均绝对误差）是 RMSE 的亲戚：</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+MAE = (1/N) × Σ |pred_i − obs_i|
+
+对上面的例子：
+|−2| + |+2| + |−2| + |+2| = 8
+MAE = 8/4 = 2°C  （和 RMSE 一样，但并非总是如此）
+</pre>
+
+<p>区别在于：</p>
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">比较维度</th><th style="padding:6px;border:1px solid #90caf9;">RMSE</th><th style="padding:6px;border:1px solid #90caf9;">MAE</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">对异常值的敏感度</td><td style="padding:5px;border:1px solid #e0e0e0;">🔥 高（平方放大）</td><td style="padding:5px;border:1px solid #e0e0e0;">🟢 低（绝对值线性）</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">数学性质</td><td style="padding:5px;border:1px solid #e0e0e0;">处处可微（梯度下降友好）</td><td style="padding:5px;border:1px solid #e0e0e0;">在 0 处不可微</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">物理直观</td><td style="padding:5px;border:1px solid #e0e0e0;">给了大错误更大的惩罚</td><td style="padding:5px;border:1px solid #e0e0e0;">每个错误同等对待</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">比赛常用</td><td style="padding:5px;border:1px solid #e0e0e0;">✅ 主力指标</td><td style="padding:5px;border:1px solid #e0e0e0;">📋 辅助参考</td></tr>
+</table>
+
+<div style="background:#fff3cd;padding:10px;border-radius:6px;border-left:4px solid #ffc107;margin:8px 0;">
+<strong>💡 大白话：</strong>RMSE 像是一个"严格要求"的老师——你犯大错他会加倍罚你（平方）。MAE 像是一个"公平"的老师——错多少扣多少。气象大模型论文主要用 RMSE，因为在实际应用中，一次严重的预报失误比多次小幅偏差危害更大。
+</div>
+
+<hr/>
+
+<h3>四、ACC：看"空间模式画得有多像"</h3>
+
+<h4>4.1 为什么光看数字大小不够？</h4>
+
+<p>假设两种预报结果：</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+实际温度：   20  21  19  22  18  23
+预报 A：    22  23  21  24  20  25   → 每个地点偏高了 2°C
+预报 B：    18  21  17  22  16  23   → 有的偏高有的偏低但模式一样
+</pre>
+
+<p>RMSE 看：A 的 RMSE 是 2°C，B 的 RMSE 也是 2°C，一样。</p>
+<p>但是，B 准确抓住了温度变化的<strong>空间模式</strong>——高温区、低温区的分布与实际情况完全吻合，只是系统性地偏低了。而 A 虽然每个位置都偏高了，但<strong>温度差异的模式也被歪曲了</strong>。</p>
+
+<p>这就有问题了：一个模型如果只是系统性地偏冷/偏暖（偏差在气象学上容易通过"偏差校正"修正），但它正确预测了哪里会发生高温、哪里会发生寒潮，那它其实是很有用的。</p>
+
+<p><strong>ACC 就是用来衡量"空间模式画得有多像"的指标。</strong></p>
+
+<h4>4.2 核心概念：距平（Anomaly）</h4>
+
+<p>在讲 ACC 公式之前，必须先明白一个概念——<strong>距平（Anomaly）</strong>。</p>
+
+<p>距平 = 实际值 − 气候态（多年平均）</p>
+
+<p>气象学认为每一个地点的温度都有一个"正常值"（由该地点的气候所决定，比如北京 6 月的平均气温是 25°C）。<strong>距平就是指"偏离正常的程度"。</strong></p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+例子：北京 6 月
+气候态（30年平均气温）= 25°C
+某日实际气温 = 30°C  →  距平 = +5°C（比正常热了 5°C）
+某日实际气温 = 20°C  →  距平 = −5°C（比正常冷了 5°C）
+</pre>
+
+<div style="background:#e8f5e9;padding:10px;border-radius:6px;border-left:4px solid #4caf50;margin:8px 0;">
+<strong>🌍 比赛中的意义：</strong>气象大模型（如 Pangu-Weather）做预报时，关心的不是"绝对温度"，而是"相对于气候态的偏移量"。因为偏移量才代表了——异常天气事件（热浪、寒潮、风暴）——这正是数值预报最重要的应用。RMSE 检查"绝对值"，ACC 检查"距平值的空间分布"。
+</div>
+
+<h4>4.3 ACC 的公式拆解</h4>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+首先计算距平：
+F′ = F − C    （预报距平 = 预报值 − 气候态）
+O′ = O − C    （观测距平 = 观测值 − 气候态）
+
+然后 ACC 就是"预报距平"和"观测距平"的相关系数：
+
+           Σ(F′ · O′)
+ACC = ────────────────
+       √( Σ(F′)² · Σ(O′)² )
+</pre>
+
+<p>用大白话解释：</p>
+<ul>
+  <li>分子：把每个网格点上（预报距平 × 观测距平）加在一起——如果它们方向一致（都正或都负），乘积为正，分子变大；方向相反，乘积为负，分子变小</li>
+  <li>分母：把所有距平值的能量（平方和）开根号——做归一化，让 ACC 范围限制在 [−1, 1]</li>
+</ul>
+
+<p>结果解读：</p>
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">ACC 值</th><th style="padding:6px;border:1px solid #90caf9;">含义</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">1.0</td><td style="padding:5px;border:1px solid #e0e0e0;">🎯 完美：空间模式完全吻合</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">0.8 ~ 0.99</td><td style="padding:5px;border:1px solid #e0e0e0;">🥇 高技巧：模式预测极好</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">0.6 ~ 0.8</td><td style="padding:5px;border:1px solid #e0e0e0;">🥈 有技巧：可用但不够精确</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">0.0 ~ 0.6</td><td style="padding:5px;border:1px solid #e0e0e0;">⚠️ 技巧较低，接近无预报能力</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">负值</td><td style="padding:5px;border:1px solid #e0e0e0;">❌ 反相关：预报的模式与实际相反</td></tr>
+</table>
+
+<h4>4.4 比赛中的意义</h4>
+<p>在模型压缩比赛中，ACC 往往<strong>比 RMSE 更敏感</strong>。因为剪枝/量化可能会破坏模型对气象系统"空间结构"的捕捉能力（比如高压脊的位置画偏了），但整体"数值大小"可能变化不大。ACC 下降通常意味着模型开始丢失对天气系统的理解。<strong>比赛评审时，ACC 的保持情况往往是"模型压缩是否合理"的关键判别依据。</strong></p>
+
+<hr/>
+
+<h3>五、RMSE vs ACC：一张表说清楚</h3>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:8px;border:1px solid #90caf9;">维度</th><th style="padding:8px;border:1px solid #90caf9;">RMSE</th><th style="padding:8px;border:1px solid #90caf9;">ACC</th></tr>
+  <tr><td style="padding:6px;border:1px solid #e0e0e0;">衡量什么</td><td style="padding:6px;border:1px solid #e0e0e0;">数值准确度</td><td style="padding:6px;border:1px solid #e0e0e0;">空间模式相似度</td></tr>
+  <tr><td style="padding:6px;border:1px solid #e0e0e0;">范围</td><td style="padding:6px;border:1px solid #e0e0e0;">[0, ∞)</td><td style="padding:6px;border:1px solid #e0e0e0;">[−1, 1]</td></tr>
+  <tr><td style="padding:6px;border:1px solid #e0e0e0;">越大越好？</td><td style="padding:6px;border:1px solid #e0e0e0;">❌ 越小越好</td><td style="padding:6px;border:1px solid #e0e0e0;">✅ 越大越好</td></tr>
+  <tr><td style="padding:6px;border:1px solid #e0e0e0;">对系统偏差</td><td style="padding:6px;border:1px solid #e0e0e0;">❌ 不能容忍（偏差也算误差）</td><td style="padding:6px;border:1px solid #e0e0e0;">✅ 容忍（减去了气候态）</td></tr>
+  <tr><td style="padding:6px;border:1px solid #e0e0e0;">对异常值</td><td style="padding:6px;border:1px solid #e0e0e0;">🔥 非常敏感</td><td style="padding:6px;border:1px solid #e0e0e0;">🟢 相对不敏感</td></tr>
+  <tr><td style="padding:6px;border:1px solid #e0e0e0;">理解难度</td><td style="padding:6px;border:1px solid #e0e0e0;">🟢 容易（单位直观）</td><td style="padding:6px;border:1px solid #e0e0e0;">🟡 需要理解距平概念</td></tr>
+  <tr><td style="padding:6px;border:1px solid #e0e0e0;">比赛场景</td><td style="padding:6px;border:1px solid #e0e0e0;">看 baseline 退化幅度</td><td style="padding:6px;border:1px solid #e0e0e0;">看压缩是否合理</td></tr>
+</table>
+
+<hr/>
+
+<h3>六、为什么要按纬度加权？</h3>
+
+<h4>6.1 地球不是平的</h4>
+
+<p>气象数据是<strong>网格化</strong>的——地球被划分成一个个小格子（如 0.25°×0.25° 网格）。但你要知道：<strong>这些网格的面积并不相等。</strong></p>
+
+<p>想象一下：赤道附近的一个"0.25°经度×0.25°纬度"的网格覆盖的实际地面面积，大约是对应精度的极地网格面积的 2 倍。因为经线在极地汇聚。</p>
+
+<p>如果计算全球平均 RMSE：</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+❌ 错误做法：所有网格同等对待
+   RMSE = √( Σ(error_i²) / N )
+   这会导致极地误差被不公平地压低，赤道误差被放大
+
+✅ 正确做法：按网格面积加权
+   Weighted RMSE = √( Σ(w_i · error_i²) / Σ(w_i) )
+   其中 w_i = cos(lat_i)
+</pre>
+
+<p><strong>cos(纬度)</strong> 这个加权因子为什么成立？因为纬度圈的周长与 cos(纬度) 成正比——赤道 cos(0°)=1，极地 cos(90°)=0。一个网格的面积 ≈ 常数 × cos(纬度) × Δ经度 × Δ纬度。</p>
+
+<div style="background:#fff3cd;padding:10px;border-radius:6px;border-left:4px solid #ffc107;margin:8px 0;">
+<strong>💡 大白话：</strong>如果你不按纬度加权，相当于给了北极一个小网格和赤道一个大网格同样的投票权。真实的地球上，大网格（赤道附近）代表更大的面积，所以它的误差应该更重要。
+</div>
+
+<h4>6.2 比赛中的意义</h4>
+<p>绝大多数气象大模型论文（包括 Pangu-Weather）都使用<strong>纬度加权 RMSE</strong> 和<strong>纬度加权 ACC</strong>。比赛评分标准一定也采用加权版本。如果你在验证时没有做面积加权，你算出来的指标会在数字上和官方评分不一样，可能导致误判自己的压缩方案是否合格。<strong>这是新手最容易忽略的细节之一。</strong></p>
+
+<hr/>
+
+<h3>七、气象变量的重要性权重</h3>
+
+<p>不同的气象变量在比赛评分中的重要性不同。Pangu-Weather 论文报告了 5 个高空变量和 1 个地面变量的指标：</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">变量</th><th style="padding:6px;border:1px solid #90caf9;">名称</th><th style="padding:6px;border:1px solid #90caf9;">重要性</th><th style="padding:6px;border:1px solid #90caf9;">典型 RMSE</th><th style="padding:6px;border:1px solid #90caf9;">预报难度</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>Z500</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">500hPa 位势高度</td><td style="padding:5px;border:1px solid #e0e0e0;">🏆 最核心</td><td style="padding:5px;border:1px solid #e0e0e0;">~50-80 m²/s²</td><td style="padding:5px;border:1px solid #e0e0e0;">🟢 易（大气环流稳定）</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>T850</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">850hPa 温度</td><td style="padding:5px;border:1px solid #e0e0e0;">🥇 高</td><td style="padding:5px;border:1px solid #e0e0e0;">~1-2 K</td><td style="padding:5px;border:1px solid #e0e0e0;">🟢 较易</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>T2M</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">2 米气温</td><td style="padding:5px;border:1px solid #e0e0e0;">🥈 中</td><td style="padding:5px;border:1px solid #e0e0e0;">~1.5-2.5 K</td><td style="padding:5px;border:1px solid #e0e0e0;">🟡 中等</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>U10</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">10 米纬向风</td><td style="padding:5px;border:1px solid #e0e0e0;">🥈 中</td><td style="padding:5px;border:1px solid #e0e0e0;">~1.5-2 m/s</td><td style="padding:5px;border:1px solid #e0e0e0;">🟡 中等</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>V10</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">10 米经向风</td><td style="padding:5px;border:1px solid #e0e0e0;">🥈 中</td><td style="padding:5px;border:1px solid #e0e0e0;">~1.5-2 m/s</td><td style="padding:5px;border:1px solid #e0e0e0;">🟡 中等</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>MSLP</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">海平面气压</td><td style="padding:5px;border:1px solid #e0e0e0;">🥈 中</td><td style="padding:5px;border:1px solid #e0e0e0;">~2-4 hPa</td><td style="padding:5px;border:1px solid #e0e0e0;">🟡 中等</td></tr>
+</table>
+
+<p><strong>比赛中的意义：</strong>模型压缩后，不同变量的精度退化程度不同。通常 Z500 最"稳定"（因为它大尺度、高空、受地形影响小），而 T2M 和 U10 最容易受压缩影响（因为近地面变量更复杂）。<strong>如果你发现在某个变量上精度退化明显，可以针对性保留那部分参数不做剪枝。</strong></p>
+
+<hr/>
+
+<h3>八、如何快速评估压缩模型的精度损失</h3>
+
+<p>在实际比赛中，你不需要对所有变量、所有预报时长做完整验证——那样太慢了。推荐一个实用的精简验证策略：</p>
+
+<ol>
+  <li><strong>筛选关键预报时长</strong>：取 24h 和 72h 两个预报时长做验证（前者代表短期，后者代表中期）</li>
+  <li><strong>筛选代表性变量</strong>：选 Z500（最稳定）和 T2M（最敏感）作为"晴雨表"</li>
+  <li><strong>计算压缩比</strong>：压缩后模型参数量 ÷ 原始模型参数量，得到"剩余比例"</li>
+  <li><strong>计算退化率</strong>：</li>
+</ol>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+RMSE 退化率 = (RMSE_压缩 − RMSE_baseline) / RMSE_baseline × 100%
+ACC 退化率 = (ACC_baseline − ACC_压缩) / ACC_baseline × 100%
+
+一般经验法则：
+✅ RMSE 退化率 &lt; 5%  → 安全压缩
+⚠️ RMSE 退化率 5-10% → 可接受，但需说明
+❌ RMSE 退化率 &gt; 10% → 压缩过度，需重新调整策略
+</pre>
+
+<hr/>
+
+<h3>九、常见误区</h3>
+
+<ul>
+  <li><b>RMSE 和 ACC 选一个就行了：</b>不行。它们看的是不同的东西——RMSE 看"数值准确度"，ACC 看"空间模式相似度"。一个模型可能 ACC 很高但 RMSE 很大（系统偏差），也可能 RMSE 很小但 ACC 很低（数值碰巧对但模式错了）。两个指标必须同时看。</li>
+  <li><b>RMSE 和 MAE 差不多的：</b>只有在误差分布对称且无离群值时成立。模型压缩后可能会出现个别网格上的异常退化，此时 RMSE 会比 MAE 退化得更严重。</li>
+  <li><b>ACC 负值就是模型没用：</b>对于短期预报（1-3天），如果 ACC 变成负值确实说明模型完全不可用。但 ACC 会随着预报时长自然衰减，长期预报（10-15天）ACC≈0 是正常的——此时预报已经从"确定性预报"退化为"气候态预报"了。</li>
+  <li><b>纬度加权只影响极地：</b>实际上中纬度（30°-60°）的网格面积已经明显小于赤道，不加权会导致中纬度误差高估，赤道误差低估。</li>
+  <li><b>压缩后看一个变量的指标就够了：</b>不同变量对压缩的敏感度差别巨大。建议至少看 Z500、T850、T2M 三个变量。</li>
+</ul>
+
+<hr/>
+
+<h3>十、核心概念速查表</h3>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">概念</th><th style="padding:6px;border:1px solid #90caf9;">一句话解释</th><th style="padding:6px;border:1px solid #90caf9;">比赛中的作用</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">RMSE</td><td style="padding:5px;border:1px solid #e0e0e0;">预报值与实际值的平均误差（平方后再开根号）</td><td style="padding:5px;border:1px solid #e0e0e0;">评估压缩后数值精度的退化程度</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">MAE</td><td style="padding:5px;border:1px solid #e0e0e0;">预报误差绝对值的平均</td><td style="padding:5px;border:1px solid #e0e0e0;">与 RMSE 对比，判断是否有异常离群退化</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ACC</td><td style="padding:5px;border:1px solid #e0e0e0;">预报距平与观测距平的空间相关系数</td><td style="padding:5px;border:1px solid #e0e0e0;">判断压缩后模型是否仍能"理解"天气系统结构</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">距平</td><td style="padding:5px;border:1px solid #e0e0e0;">当前值减去该地点的多年平均气候值</td><td style="padding:5px;border:1px solid #e0e0e0;">滤除气候系统偏差，聚焦"异常天气事件"的预测</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">纬度加权</td><td style="padding:5px;border:1px solid #e0e0e0;">每个网格按 cos(纬度) 加权后求平均</td><td style="padding:5px;border:1px solid #e0e0e0;">保证全球平均不被网格面积不均匀所扭曲</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">Z500</td><td style="padding:5px;border:1px solid #e0e0e0;">500hPa 气压面的位势高度，大气环流的"脊梁"</td><td style="padding:5px;border:1px solid #e0e0e0;">最稳定的核心指标，压缩后的首要监控变量</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">退化率</td><td style="padding:5px;border:1px solid #e0e0e0;">压缩后指标相比 baseline 的变化百分比</td><td style="padding:5px;border:1px solid #e0e0e0;">决定压缩方案是否通过的核心量化依据</td></tr>
+</table>
+
+<hr/>
+
+<h3>📅 明日预告（Day 12）：气象指标与精度验证（下）</h3>
+<p>明天继续深入气象精度验证的第二部分：ACC 的数学推导细节、如何用脚本复现 baseline 的指标、以及比赛中常被忽视的"精度对齐陷阱"——为什么你和队友算出来的 RMSE 不一样？</p>
+<p>前置知识：今天讲的所有内容。</p>
+      ]]></description>
+    </item>
+
   </channel>
 </rss>
