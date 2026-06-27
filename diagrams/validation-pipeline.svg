@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="box1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="box2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#059669"/><stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="box3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#d97706"/><stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <linearGradient id="box4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dc2626"/><stop offset="100%" stop-color="#b91c1c"/>
+    </linearGradient>
+    <linearGradient id="box5" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="900" height="520" fill="url(#bg)" rx="12"/>
+
+  <text x="450" y="35" fill="#f1f5f9" font-size="16" font-weight="bold" text-anchor="middle">气象模型压缩验证流程（概念设计）</text>
+
+  <!-- Step boxes -->
+  <rect x="50" y="60" width="170" height="70" rx="8" fill="url(#box1)" filter="url(#shadow)"/>
+  <text x="135" y="88" fill="#fff" font-size="13" font-weight="bold" text-anchor="middle">① 基线准备</text>
+  <text x="135" y="106" fill="#bfdbfe" font-size="10" text-anchor="middle">加载原始权重</text>
+  <text x="135" y="120" fill="#bfdbfe" font-size="10" text-anchor="middle">固定验证数据集</text>
+
+  <line x1="220" y1="95" x2="265" y2="95" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="270" y="60" width="170" height="70" rx="8" fill="url(#box2)" filter="url(#shadow)"/>
+  <text x="355" y="88" fill="#fff" font-size="13" font-weight="bold" text-anchor="middle">② baseline 评估</text>
+  <text x="355" y="106" fill="#a7f3d0" font-size="10" text-anchor="middle">纬度加权 RMSE</text>
+  <text x="355" y="120" fill="#a7f3d0" font-size="10" text-anchor="middle">纬度加权 ACC</text>
+
+  <line x1="440" y1="95" x2="485" y2="95" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="490" y="60" width="180" height="70" rx="8" fill="url(#box3)" filter="url(#shadow)"/>
+  <text x="580" y="88" fill="#fff" font-size="13" font-weight="bold" text-anchor="middle">③ 压缩方案迭代</text>
+  <text x="580" y="106" fill="#fde68a" font-size="10" text-anchor="middle">剪枝 → 量化 → 导出</text>
+  <text x="580" y="120" fill="#fde68a" font-size="10" text-anchor="middle">逐版本记录参数</text>
+
+  <line x1="670" y1="95" x2="715" y2="95" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="720" y="60" width="150" height="70" rx="8" fill="url(#box4)" filter="url(#shadow)"/>
+  <text x="795" y="88" fill="#fff" font-size="13" font-weight="bold" text-anchor="middle">④ 压缩后评估</text>
+  <text x="795" y="106" fill="#fecaca" font-size="10" text-anchor="middle">同样指标</text>
+  <text x="795" y="120" fill="#fecaca" font-size="10" text-anchor="middle">同样数据集</text>
+
+  <!-- Feedback loop arrow -->
+  <path d="M 795 130 L 795 180 L 580 180 L 580 130" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+  <text x="688" y="176" fill="#fbbf24" font-size="9" text-anchor="middle">退化率超标 → 调整方案</text>
+
+  <!-- Bottom section - alignment pitfalls -->
+  <rect x="50" y="220" width="820" height="1" fill="#334155"/>
+
+  <text x="450" y="250" fill="#f1f5f9" font-size="14" font-weight="bold" text-anchor="middle">精度对齐的六大陷阱</text>
+
+  <!-- 6 pitfall cards in a 3×2 grid -->
+  <rect x="50" y="270" width="240" height="60" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="170" y="290" fill="#f59e0b" font-size="11" font-weight="bold" text-anchor="middle">⚠ 陷阱 1：加权 vs 未加权</text>
+  <text x="170" y="310" fill="#94a3b8" font-size="9" text-anchor="middle">不加权会使极地误差被压低</text>
+  <text x="170" y="322" fill="#94a3b8" font-size="9" text-anchor="middle">赤道误差被放大</text>
+
+  <rect x="330" y="270" width="240" height="60" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="450" y="290" fill="#f59e0b" font-size="11" font-weight="bold" text-anchor="middle">⚠ 陷阱 2：变量选择不同</text>
+  <text x="450" y="310" fill="#94a3b8" font-size="9" text-anchor="middle">只看 Z500 会漏掉 T2M 退化</text>
+  <text x="450" y="322" fill="#94a3b8" font-size="9" text-anchor="middle">只看 T2M 会低估整体</text>
+
+  <rect x="610" y="270" width="240" height="60" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="730" y="290" fill="#f59e0b" font-size="11" font-weight="bold" text-anchor="middle">⚠ 陷阱 3：预报时长不一致</text>
+  <text x="730" y="310" fill="#94a3b8" font-size="9" text-anchor="middle">6h vs 168h 的 RMSE 差数倍</text>
+  <text x="730" y="322" fill="#94a3b8" font-size="9" text-anchor="middle">团队需约定验证时间点</text>
+
+  <rect x="50" y="345" width="240" height="60" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="170" y="365" fill="#f59e0b" font-size="11" font-weight="bold" text-anchor="middle">⚠ 陷阱 4：插值方法差异</text>
+  <text x="170" y="385" fill="#94a3b8" font-size="9" text-anchor="middle">双线性 vs 最近邻插值</text>
+  <text x="170" y="397" fill="#94a3b8" font-size="9" text-anchor="middle">影响 1e-3 量级的 RMSE 差异</text>
+
+  <rect x="330" y="345" width="240" height="60" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="450" y="365" fill="#f59e0b" font-size="11" font-weight="bold" text-anchor="middle">⚠ 陷阱 5：缺失值处理</text>
+  <text x="450" y="385" fill="#94a3b8" font-size="9" text-anchor="middle">陆地/海洋掩码不一致</text>
+  <text x="450" y="397" fill="#94a3b8" font-size="9" text-anchor="middle">mask 差异导致分母不同</text>
+
+  <rect x="610" y="345" width="240" height="60" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="730" y="365" fill="#f59e0b" font-size="11" font-weight="bold" text-anchor="middle">⚠ 陷阱 6：气候态数据不同</text>
+  <text x="730" y="385" fill="#94a3b8" font-size="9" text-anchor="middle">ERA5 vs CFSR 气候态不同</text>
+  <text x="730" y="397" fill="#94a3b8" font-size="9" text-anchor="middle">直接影响 ACC 计算</text>
+
+  <!-- Bottom note -->
+  <rect x="50" y="430" width="820" height="65" rx="6" fill="#0f172a" stroke="#1e40af" stroke-width="1"/>
+  <text x="460" y="452" fill="#93c5fd" font-size="11" font-weight="bold" text-anchor="middle">🔑 核心原则：压缩方案评估 = 统一 baseline + 统一数据集 + 统一指标实现 + 统一变量集</text>
+  <text x="460" y="472" fill="#64748b" font-size="10" text-anchor="middle">验证前团队必须对齐以上六项，否则算出来的"退化率"毫无意义</text>
+
+  <!-- Lead time info -->
+  <text x="460" y="505" fill="#475569" font-size="9" text-anchor="middle">推荐验证方案：Z500 + T850 + T2M | 24h + 72h 两个预报时长 | 纬度加权 | 固定同一气候态</text>
+</svg>
