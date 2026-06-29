@@ -1340,5 +1340,365 @@ ACC 退化率  = (ACC_baseline − ACC_压缩) / ACC_baseline × 100%
       ]]></description>
     </item>
 
+    <item>
+      <title>第14天：剪枝实验设计（下）— ONNX 兼容性与实验记录 | 零基础精讲</title>
+      <link>https://onnxruntime.ai/docs/reference/compatibility.html</link>
+      <guid>weather-learning-day14-2026-06-29</guid>
+      <pubDate>2026-06-29 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+<h2>今日主题：剪枝实验设计（下）— ONNX 兼容性检查清单与实验记录</h2>
+
+<p>昨天我们学习了剪枝实验设计的上半部分：Lottery Ticket Hypothesis 给了我们剪掉 30-50% 参数仍有精度的理论基础；而"先剪 Head 再剪 MLP 最后才剪通道"是经过验证的安全策略。</p>
+
+<p>今天回答比赛中最关键的落地问题：</p>
+<ol>
+  <li><strong>剪完的模型能成功导出 ONNX 吗？</strong></li>
+  <li><strong>导出后能在国产推理引擎上跑通吗？</strong></li>
+  <li><strong>每次剪枝实验的参数和结果怎么记录才不混乱？</strong></li>
+</ol>
+
+<hr/>
+
+<h3>一、结构化剪枝后 ONNX 导出的三大"翻车现场"</h3>
+
+<p>很多参赛者在模型剪枝上花了一周，精度保持得很漂亮，但一导出 ONNX 就报错。下面是三个最常见的情况：</p>
+
+<h4>1.1 翻车现场 A：Reshape 维度对不上</h4>
+
+<p>Pangu-Weather 的 3D Patch Embedding 和窗口划分包含大量 reshape / view / permute 操作。当你剪掉一些头或通道后，某些 reshape 的分母变了，但代码中写死的维度没变。</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+示例错误（简化版）：
+输入 shape = [1, 1024, 128]   ← 剪枝后变成了 [1, 896, 128]
+↓
+reshape(-1, 8, 128)           ← 1024÷8=128，但 896÷8=112...可以，对得上
+↓
+permute + reshape 回 [1, 1024, 128]  ← ❌ 这里 112×128×? 回不到 1024！
+</pre>
+
+<div style="background:#fff3cd;padding:10px;border-radius:6px;border-left:4px solid #ffc107;margin:8px 0;">
+<strong>💡 对策：</strong>每次剪枝后，先用 PyTorch 跑一次完整前向，确保从输入到输出的所有中间 tensor shape 都正确。不要跳过错检查直接做 ONNX 导出。
+</div>
+
+<h4>1.2 翻车现场 B：动态控制流导致 tracing 失败</h4>
+
+<p>PyTorch 的 <code>torch.onnx.export</code> 默认使用 <strong>tracing（跟踪）</strong> 方式：它给模型一个 fake input，沿着计算图走一遍，把经过的所有操作记录下来。但如果模型里有动态控制流——如 <code>if x.shape[0] &gt; 10: ... else: ...</code>——tracing 只走了其中一条分支，另一条分支被丢掉了。</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+| 导出方式 | 原理 | 优点 | 缺点 |
+|---------|------|------|------|
+| Tracing（跟踪） | 实际运行一次模型，记录操作 | 简单、速度快 | 无法处理动态控制流 |
+| Scripting（脚本化） | 用 torch.jit.script 解析 Python 代码 | 能处理所有控制流 | 需要模型代码兼容 torchscript |
+</pre>
+
+<div style="background:#fff3cd;padding:10px;border-radius:6px;border-left:4px solid #ffc107;margin:8px 0;">
+<strong>💡 对策：</strong>Pangu-Weather 官方代码不包含动态控制流，所以 tracing 够用。但如果你在修改代码添加了动态逻辑（如动态调整窗口大小），则需要改用 scripting 或手动消除动态分支。
+</div>
+
+<h4>1.3 翻车现场 C：剪枝后权重与计算图不一致</h4>
+
+<p>最常见的低级错误：你在 PyTorch 中做了 in-place 剪枝（直接修改了模型的权重 <code>model.weight.data[:, :10] = 0</code>），但模型的<strong>计算图结构本身并没有变</strong>——矩阵大小还是原来的。这样导出的 ONNX 模型实际计算量没有减少，只是某些权重变成了 0，完全达不到加速效果。</p>
+
+<div style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+正确的结构化剪枝流程：
+┌─────────────────────────────────────┐
+│ 方法A：使用 TorchPruning 框架       │
+│  → 自动处理 DepGraph，同时修改      │
+│    权重值和计算图结构                │
+├─────────────────────────────────────┤
+│ 方法B：手动 mask 法（不推荐）        │
+│  → 只把权重设 0 但保留维度           │
+│  → 导出的 ONNX 不会加速！           │
+└─────────────────────────────────────┘
+</div>
+
+<hr/>
+
+<h3>二、结构化剪枝 → ONNX 导出 → 推理部署 8 阶段检查清单</h3>
+
+<p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/pruning-onnx-compatibility.svg" alt="结构化剪枝到部署的兼容性检查清单" style="max-width:100%;border-radius:8px;margin:10px 0;"/></p>
+
+<p>下面逐一说明每个 Stage 要做什么、怎么检查、以及通过标准。</p>
+
+<h4>Stage 1：形状一致性检查</h4>
+<p><strong>做什么：</strong>剪枝后，在 PyTorch 中做一次完整前向传播，记录每一层输入输出的 tensor shape，与剪枝前的 baseline 对照。</p>
+<p><strong>检查哪些位置：</strong></p>
+<ul>
+  <li>每个 Attention Block 的 Q/K/V 输出是否匹配新的头数</li>
+  <li>Residual 连接两端的维度是否匹配</li>
+  <li>LayerNorm 的 normalized_shape 是否匹配</li>
+  <li>3D 窗口 reshape 操作是否还有整数除尽问题</li>
+</ul>
+<p><strong>通过标准：</strong>所有中间 tensor shape 与剪枝前一致（通道数变化处、层数变化处例外，但必须是设计意图内的变化）。</p>
+
+<h4>Stage 2：ONNX 导出检查</h4>
+<p><strong>做什么：</strong>用 torch.onnx.export() 尝试导出模型到 ONNX。</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+推荐导出参数：
+torch.onnx.export(
+    model,
+    dummy_input,
+    "pruned_model.onnx",
+    opset_version=15,         # 推荐 ≥ 15，最好 17
+    input_names=["input"],
+    output_names=["output"],
+    dynamic_axes={             # 如果推理引擎支持动态 batch
+        "input": {0: "batch_size"},
+        "output": {0: "batch_size"}
+    },
+    verbose=False,
+)
+</pre>
+<p><strong>通过标准：</strong>导出成功，无报错。如果报错，定位到具体算子，看是哪个 PyTorch 操作 ONNX 不支持。</p>
+
+<h4>Stage 3：onnxsim 简化验证</h4>
+<p><strong>做什么：</strong>导出后用 onnxsim 简化模型，对比简化前后的节点数和参数数量。</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+# onnxsim 简化
+python -m onnxsim pruned_model.onnx pruned_model_simplified.onnx
+
+# 查看模型结构信息
+python -c "
+import onnx
+m = onnx.load('pruned_model_simplified.onnx')
+print(f'节点数: {len(m.graph.node)}')
+print(f'参数量: {sum(p.dims.num_elements() for p in m.graph.initializer if p.name)}')
+"
+</pre>
+<p><strong>检查点：</strong>有没有遗留的 Identity 节点？Reshape 节点是否过多？Dropout 节点是否还在？</p>
+<p><strong>通过标准：</strong>简化后节点数比原始 ONNX 减少 20% 以上（一般从 ~2000 节点降到 ~1500 左右）。</p>
+
+<h4>Stage 4：ONNX Runtime 推理一致性</h4>
+<p><strong>做什么：</strong>用 ONNX Runtime 加载简化后的模型，用同一组输入分别跑 PyTorch 和 ONNX Runtime 推理，逐元素对比输出。</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+import onnxruntime as ort
+import numpy as np
+import torch
+
+# 加载 ONNX 模型
+session = ort.InferenceSession("pruned_model_simplified.onnx")
+
+# 构造相同输入
+x = torch.randn(1, 5, 721, 1440, 4)
+
+# PyTorch 推理
+with torch.no_grad():
+    pytorch_out = model(x).numpy()
+
+# ONNX Runtime 推理
+ort_inputs = {session.get_inputs()[0].name: x.numpy()}
+ort_out = session.run(None, ort_inputs)[0]
+
+# 逐元素对比
+max_diff = np.max(np.abs(pytorch_out - ort_out))
+print(f"最大绝对差异: {max_diff:.6f}")
+</pre>
+<p><strong>通过标准：</strong>最大绝对差异 &lt; 1e-3（FP32 下通常 &lt; 1e-5）。如果差异很大，说明剪枝引入了某些不能 export 的算子。</p>
+
+<h4>Stage 5：OpSet 版本检查</h4>
+<p><strong>做什么：</strong>确认导出的 ONNX 模型的 opset 版本在目标国产推理引擎支持的范围内。</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+python -c "
+import onnx
+m = onnx.load('pruned_model_simplified.onnx')
+print(f'Opset 版本: {m.opset_import[0].version}')
+"
+</pre>
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">推理引擎</th><th style="padding:6px;border:1px solid #90caf9;">推荐 Opset</th><th style="padding:6px;border:1px solid #90caf9;">备注</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime CPU</td><td style="padding:5px;border:1px solid #e0e0e0;">≥ 15</td><td style="padding:5px;border:1px solid #e0e0e0;">兼容性最好，建议选 17</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime ROCm EP</td><td style="padding:5px;border:1px solid #e0e0e0;">≥ 15</td><td style="padding:5px;border:1px solid #e0e0e0;">部分高级算子可能缺失</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">华为 CANN</td><td style="padding:5px;border:1px solid #e0e0e0;">11-13（OM 格式）</td><td style="padding:5px;border:1px solid #e0e0e0;">需要转 OM，算子覆盖需逐一确认</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">海光 DTK</td><td style="padding:5px;border:1px solid #e0e0e0;">≥ 15</td><td style="padding:5px;border:1px solid #e0e0e0;">兼容 ROCm，算子覆盖度 ~99%</td></tr>
+</table>
+<p><strong>通过标准：</strong>目标引擎 opset 版本 ≥ 导出版本。</p>
+
+<h4>Stage 6：国产卡算子覆盖检查</h4>
+<p><strong>做什么：</strong>列出 ONNX 模型中使用的所有算子类型，和目标卡支持的算子库逐一对比。</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+python -c "
+import onnx
+m = onnx.load('pruned_model_simplified.onnx')
+ops = set()
+for node in m.graph.node:
+    ops.add(node.op_type)
+print(f'使用了 {len(ops)} 种算子:')
+for op in sorted(ops):
+    print(f'  - {op}')
+"
+</pre>
+<p><strong>需要检查的特殊算子：</strong></p>
+<ul>
+  <li><code>Reshape</code> / <code>Transpose</code> / <code>Gather</code> —— 国产卡上通常支持但性能较差</li>
+  <li><code>LayerNormalization</code> —— opset 17 后才有标准化版本，部分国产卡需要降级为数学组合算子</li>
+  <li><code>Softmax</code> —— 在国产卡上可能有精度差异（log-softmax vs softmax 实现不同）</li>
+  <li><code>Gelu</code> / <code>FastGelu</code> —— 国产卡未必有优化实现</li>
+</ul>
+<p><strong>通过标准：</strong>所有算子都在目标卡的支持列表内。如果否，需要：</p>
+<ol>
+  <li>将不支持的算子替换为数学等价的基础算子组合（如 LayerNorm → ReduceMean + Sub + Div + Mul + Add）</li>
+  <li>或者修改剪枝策略，避免导出不支持的算子变体</li>
+</ol>
+
+<h4>Stage 7：数值精度对齐</h4>
+<p><strong>做什么：</strong>从 FP32 → FP16 → INT8 逐级对比验证集的 RMSE/ACC 退化。</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+精度对齐流程：
+
+1. PyTorch FP32 前向 → RMSE_baseline, ACC_baseline
+         ↓
+2. ONNX Runtime FP32 推理 → 确认一致性 (与 PyTorch 偏差 &lt; 1e-5)
+         ↓
+3. ONNX Runtime FP16 推理 → FP16 退化率
+         ↓
+4. ONNX Runtime INT8 推理 → INT8 退化率
+         ↓
+5. 国产卡上重复 3-4 → 确认芯片间精度差异
+</pre>
+<p><strong>通过标准：</strong>FP32→FP16 退化率 &lt; 2%；FP32→INT8 退化率 &lt; 5%（或根据比赛规则）。</p>
+
+<h4>Stage 8：性能基准测试</h4>
+<p><strong>做什么：</strong>在目标国产卡上测量剪枝后模型的推理延迟、吞吐量和显存占用。</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+标准 benchmark 流程：
+1. Warmup 5 次（消除 GPU 初始状态的不稳定性）
+2. 正式推理 20 次，记录每次的延迟
+3. 计算平均延迟（mean）和标准差（std）
+4. 计算吞吐量 = batch_size × 1000 / 平均延迟（样本/秒）
+5. 记录峰值显存占用
+
+对比 baseline（未剪枝模型）：
+  加速比 = 剪枝后延迟 / baseline 延迟   （越低越好）
+  吞吐提升率 = (剪枝后吞吐 - baseline 吞吐) / baseline × 100%
+</pre>
+<p><strong>通过标准：</strong>剪枝后推理速度有可测量的提升（加速比 &lt; 1），且在精度可接受范围内。</p>
+
+<hr/>
+
+<h3>三、实验记录与跟踪系统</h3>
+
+<p>在真实比赛中，你可能会跑 20-50 组剪枝实验。如果不系统记录，一周后你根本记不清"那组 RMSE=1.45 的是剪了多少头、在哪个 Stage 上做的"。</p>
+
+<h4>3.1 推荐实验记录表</h4>
+
+<p>每次实验记录以下字段（推荐用 CSV 或 Notion 表格）：</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">字段</th><th style="padding:6px;border:1px solid #90caf9;">示例值</th><th style="padding:6px;border:1px solid #90caf9;">说明</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">experiment_id</td><td style="padding:5px;border:1px solid #e0e0e0;">prune_008</td><td style="padding:5px;border:1px solid #e0e0e0;">唯一编号，方便引用</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">date</td><td style="padding:5px;border:1px solid #e0e0e0;">2026-06-29</td><td style="padding:5px;border:1px solid #e0e0e0;">实验日期</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">target</td><td style="padding:5px;border:1px solid #e0e0e0;">Attention Head</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝目标：Head / MLP / Channel</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">stage_rates</td><td style="padding:5px;border:1px solid #e0e0e0;">{S1:10%, S2:15%, S3:25%, S4:25%}</td><td style="padding:5px;border:1px solid #e0e0e0;">各 Stage 的剪枝率</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">importance_metric</td><td style="padding:5px;border:1px solid #e0e0e0;">Taylor</td><td style="padding:5px;border:1px solid #e0e0e0;">重要性评分方法</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">param_count</td><td style="padding:5px;border:1px solid #e0e0e0;">48.2M</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝后参数量</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">params_remaining</td><td style="padding:5px;border:1px solid #e0e0e0;">72.3%</td><td style="padding:5px;border:1px solid #e0e0e0;">剩余参数百分比</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">rmse_z500_24h</td><td style="padding:5px;border:1px solid #e0e0e0;">62.3</td><td style="padding:5px;border:1px solid #e0e0e0;">Z500 24h RMSE</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">rmse_z500_72h</td><td style="padding:5px;border:1px solid #e0e0e0;">98.7</td><td style="padding:5px;border:1px solid #e0e0e0;">Z500 72h RMSE</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">acc_z500_24h</td><td style="padding:5px;border:1px solid #e0e0e0;">0.903</td><td style="padding:5px;border:1px solid #e0e0e0;">Z500 24h ACC</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">latency_ms</td><td style="padding:5px;border:1px solid #e0e0e0;">45.2</td><td style="padding:5px;border:1px solid #e0e0e0;">单次推理延迟（ms）</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">peak_memory_gb</td><td style="padding:5px;border:1px solid #e0e0e0;">2.3</td><td style="padding:5px;border:1px solid #e0e0e0;">峰值显存（GB）</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ort_pass</td><td style="padding:5px;border:1px solid #e0e0e0;">✅</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime 一致性检查是否通过</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">notes</td><td style="padding:5px;border:1px solid #e0e0e0;">Stage 3 剪太多导致 LayerNorm shape 对不上</td><td style="padding:5px;border:1px solid #e0e0e0;">备注/踩坑记录</td></tr>
+</table>
+
+<h4>3.2 实验记录的最佳实践</h4>
+<ul>
+  <li><strong>每个实验一个文件夹：</strong>prune_008/ 包含剪枝后的权重、导出的 ONNX、简化后的 ONNX、benchmark 结果</li>
+  <li><strong>自动生成实验报告：</strong>写一个 Python 脚本，每次跑完实验自动把指标填进 CSV，不要手动输入</li>
+  <li><strong>GIT 管理实验代码：</strong>每个实验用独立的 Git branch，或在代码中记录 commit SHA</li>
+  <li><strong>预留 baseline 记录位：</strong>实验 001 永远是原始模型（0% 剪枝）的指标，后面所有实验都跟它比</li>
+</ul>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+推荐实验目录结构：
+exp/
+├── 001_baseline/
+│   ├── model.pt        ← 原始模型权重
+│   ├── metrics.json    ← baseline 指标
+│   └── notes.md
+├── 002_prune_head_10/
+│   ├── pruned_model.pt
+│   ├── onnx_export/
+│   │   ├── model.onnx
+│   │   └── model_simplified.onnx
+│   ├── ort_result.npy  ← ONNX Runtime 对齐输出
+│   ├── metrics.json    ← 剪枝后指标
+│   └── notes.md
+├── 003_prune_head_20/
+│   └── ...
+└── experiment_log.csv  ← 汇总表
+</pre>
+
+<hr/>
+
+<h3>四、五大"剪枝实验踩坑"经验总结</h3>
+
+<h4>🕳 坑1：忘记重置初始种子</h4>
+<p><strong>表现：</strong>相同的剪枝参数两次跑出来的 RMSE 不一样。</p>
+<p><strong>原因：</strong>TorchPruning 剪枝过程中的随机采样（如随机挑选同等重要性的头）没有固定种子。</p>
+<p><strong>对策：</strong>每次实验前固定 <code>torch.manual_seed(42)</code> 和 <code>np.random.seed(42)</code>。</p>
+
+<h4>🕳 坑2：剪枝后不做 onnxsim 直接上国产卡</h4>
+<p><strong>表现：</strong>国产卡报错"unsupported operator"。</p>
+<p><strong>原因：</strong>原始 ONNX 里包含大量 Identity、Dropout（训练时遗留）、冗余 Cast 等无用节点。这些节点在国产卡的算子库中可能没有对应实现。</p>
+<p><strong>对策：</strong>导出 ONNX 后第一件事就是运行 onnxsim。再不行就手动替换不支持的算子为数学等价组合。</p>
+
+<h4>🕳 坑3：同一剪枝率在不同 Stage 效果天差地别</h4>
+<p><strong>表现：</strong>把 Stage 1 剪了 20% 头 → RMSE 跳了 15%；把 Stage 4 剪 20% → RMSE 只跳了 2%。</p>
+<p><strong>原因：</strong>浅层 Stage（靠近输入）的特征提取更关键，冗余度更低。深层 Stage 的特征更抽象，冗余度更高。</p>
+<p><strong>对策：</strong>永远使用非均匀剪枝，浅层少剪（5-10%），深层多剪（20-30%）。</p>
+
+<h4>🕳 坑4：只看 RMSE 不看 ACC</h4>
+<p><strong>表现：</strong>剪枝后 RMSE 只上升了 3%，觉得"没怎么损失精度"，但实际 ACC 下降了 0.08。</p>
+<p><strong>原因：</strong>RMSE 只看"数值"大小，ACC 看"空间模式"。剪枝可能破坏了模型对天气系统结构的理解，但数值偏差不大。</p>
+<p><strong>对策：</strong>同时监控 RMSE 和 ACC，两个指标都满足阈值才算通过。</p>
+
+<h4>🕳 坑5：在导出 ONNX 前没有在 PyTorch 中做精度验证</h4>
+<p><strong>表现：</strong>剪枝后在 PyTorch 里看起来精度没问题，但导出 ONNX 后精度炸了。不知道是剪枝的问题还是 ONNX 算子实现的问题。</p>
+<p><strong>对策：</strong>对照以下表格做分层排查：</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">步骤</th><th style="padding:6px;border:1px solid #90caf9;">精度</th><th style="padding:6px;border:1px solid #90caf9;">结论</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">PyTorch 剪枝前</td><td style="padding:5px;border:1px solid #e0e0e0;">高</td><td style="padding:5px;border:1px solid #e0e0e0;">baseline 成立</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">PyTorch 剪枝后</td><td style="padding:5px;border:1px solid #e0e0e0;">高</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝成功 ✅</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime</td><td style="padding:5px;border:1px solid #e0e0e0;">高</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX 导出正确 ✅</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">国产卡上</td><td style="padding:5px;border:1px solid #e0e0e0;">低</td><td style="padding:5px;border:1px solid #e0e0e0;">国产卡算子实现精度问题 🔴</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">PyTorch 剪枝后</td><td style="padding:5px;border:1px solid #e0e0e0;">低</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝本身的问题 🔴</td></tr>
+</table>
+
+<hr/>
+
+<h3>五、核心概念速查表</h3>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">概念</th><th style="padding:6px;border:1px solid #90caf9;">一句话解释</th><th style="padding:6px;border:1px solid #90caf9;">比赛中的意义</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">Tracing 导出</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX 通过实际运行一次模型记录计算图</td><td style="padding:5px;border:1px solid #e0e0e0;">Pangu-Weather 无动态控制流，用 tracing 足够</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">onnxsim</td><td style="padding:5px;border:1px solid #e0e0e0;">简化 ONNX 模型（常量折叠、Identity 消除等）</td><td style="padding:5px;border:1px solid #e0e0e0;">导出后第一条命令，节点数可减少 20-40%</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ORT 一致性检查</td><td style="padding:5px;border:1px solid #e0e0e0;">对比 PyTorch 和 ONNX Runtime 的输出是否一致</td><td style="padding:5px;border:1px solid #e0e0e0;">确保 ONNX 导出没引入精度问题</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">算子覆盖检查</td><td style="padding:5px;border:1px solid #e0e0e0;">确认 ONNX 模型中的所有算子国产卡都有实现</td><td style="padding:5px;border:1px solid #e0e0e0;">最容易被忽视的致命问题</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">非均匀剪枝</td><td style="padding:5px;border:1px solid #e0e0e0;">不同 Stage 用不同剪枝率</td><td style="padding:5px;border:1px solid #e0e0e0;">浅层少剪、深层多剪，效果远好于均匀</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">实验记录表</td><td style="padding:5px;border:1px solid #e0e0e0;">系统化记录每次实验的参数和结果</td><td style="padding:5px;border:1px solid #e0e0e0;">20+ 组实验后仍能追溯和对比</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">精度分层排查</td><td style="padding:5px;border:1px solid #e0e0e0;">逐步缩小精度问题的根源</td><td style="padding:5px;border:1px solid #e0e0e0;">遇到精度问题时，快速定位是剪枝、导出还是国产卡的问题</td></tr>
+</table>
+
+<hr/>
+
+<h3>六、常见误区</h3>
+<ul>
+  <li><b>ONNX 导出成功了就等于模型没问题：</b>错。导出成功只说明计算图能被记录，不代表精度对齐了。Stage 4 的 ORT 一致性检查绝对不能跳过。</li>
+  <li><b>onnxsim 不是必须的：</b>错。onnxsim 不仅能简化图结构，还能提前暴露那些国产卡不支持的高级融合算子。</li>
+  <li><b>实验记录可以比赛结束后再补：</b>大错特错。比赛进行到一半，你跑了 15 组实验后，记忆已经完全模糊。实验记录应该在每次实验结束后 5 分钟内完成。</li>
+  <li><b>所有国产卡都支持 ONNX Runtime：</b>不一定。华为昇腾需要用 CANN 的 OM 格式，海光 DCU 支持 ONNX Runtime ROCm EP。具体看比赛指定平台。</li>
+  <li><b>剪枝 + 量化一起做能省时间：</b>千万别。先单独做剪枝，通过 Stage 1-8 检查后再加量化。两个操作叠加后精度问题更难排查。</li>
+</ul>
+
+<hr/>
+
+<h3>📅 明日预告（Day 15-16）：量化实验与精度对齐</h3>
+<p>从明天开始的两个专题日，我们用同样系统化的方法设计量化实验：PTQ 和 QAT 在气象模型上的精度差异有多大？FP16 → INT8 的精度损失分布——哪些层最敏感？如何与精度队友对齐评测流程？</p>
+<p>前置知识：Day 5 的量化基础、Day 11-12 的精度验证方法。</p>
+      ]]></description>
+    </item>
+
   </channel>
 </rss>
