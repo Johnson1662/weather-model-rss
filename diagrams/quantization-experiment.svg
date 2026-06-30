@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 750" font-family="'Segoe UI', 'Microsoft YaHei', Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#455a64"/>
+    </marker>
+    <marker id="arrow-warn" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#e53935"/>
+    </marker>
+    <marker id="arrow-ok" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#2e7d32"/>
+    </marker>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f5f7fa"/>
+      <stop offset="100%" style="stop-color:#e8ecf1"/>
+    </linearGradient>
+    <linearGradient id="header-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1565c0"/>
+      <stop offset="100%" style="stop-color:#0d47a1"/>
+    </linearGradient>
+    <linearGradient id="ptq-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#42a5f5"/>
+      <stop offset="100%" style="stop-color:#1e88e5"/>
+    </linearGradient>
+    <linearGradient id="qat-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#66bb6a"/>
+      <stop offset="100%" style="stop-color:#43a047"/>
+    </linearGradient>
+    <linearGradient id="smooth-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ab47bc"/>
+      <stop offset="100%" style="stop-color:#8e24aa"/>
+    </linearGradient>
+    <linearGradient id="layer-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#e53935"/>
+      <stop offset="30%" style="stop-color:#ff7043"/>
+      <stop offset="70%" style="stop-color:#ffb74d"/>
+      <stop offset="100%" style="stop-color:#66bb6a"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="1" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="750" rx="12" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <rect x="0" y="0" width="900" height="56" rx="12" fill="url(#header-grad)"/>
+  <rect x="0" y="30" width="900" height="26" fill="url(#header-grad)"/>
+  <text x="450" y="36" text-anchor="middle" fill="#fff" font-size="18" font-weight="bold">量化实验设计全景图 — PTQ vs QAT vs SmoothQuant</text>
+
+  <!-- Section 1: PTQ Pathway -->
+  <rect x="30" y="75" width="400" height="240" rx="10" fill="#fff" stroke="#42a5f5" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="30" y="75" width="400" height="36" rx="10" fill="url(#ptq-grad)"/>
+  <rect x="30" y="95" width="400" height="16" fill="url(#ptq-grad)"/>
+  <text x="230" y="98" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">PTQ — 训练后量化（Post-Training Quantization）</text>
+
+  <text x="50" y="130" fill="#333" font-size="12">流程：</text>
+  <text x="50" y="152" fill="#555" font-size="11">① 加载 FP32/FP16 预训练模型</text>
+  <text x="50" y="172" fill="#555" font-size="11">② 准备小批量校准数据（128-512 样本）</text>
+  <text x="50" y="192" fill="#555" font-size="11">③ 收集激活值统计量：max/min/percentile</text>
+  <text x="50" y="212" fill="#555" font-size="11">④ 计算 scale + zero_point → 量化权重&激活</text>
+  <text x="50" y="232" fill="#555" font-size="11">⑤ 验证 INT8 推理精度</text>
+
+  <text x="50" y="262" fill="#e65100" font-size="11" font-weight="bold">⏱ 耗时：5-30 分钟（GPU 上更快）</text>
+  <text x="50" y="282" fill="#e53935" font-size="11" font-weight="bold">⚠ 缺点：精度损失较大（尤其 ≈ 0.5-3%）</text>
+  <text x="50" y="302" fill="#2e7d32" font-size="11" font-weight="bold">✓ 优点：速度快、无需训练、一键完成</text>
+
+  <!-- Section 2: QAT Pathway -->
+  <rect x="470" y="75" width="400" height="240" rx="10" fill="#fff" stroke="#66bb6a" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="470" y="75" width="400" height="36" rx="10" fill="url(#qat-grad)"/>
+  <rect x="470" y="95" width="400" height="16" fill="url(#qat-grad)"/>
+  <text x="670" y="98" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">QAT — 量化感知训练（Quantization-Aware Training）</text>
+
+  <text x="490" y="130" fill="#333" font-size="12">流程：</text>
+  <text x="490" y="152" fill="#555" font-size="11">① 在模型中插入 FakeQuantize 节点</text>
+  <text x="490" y="172" fill="#555" font-size="11">② 模拟量化效果（round + clamp）</text>
+  <text x="490" y="192" fill="#555" font-size="11">③ 反向传播更新权重（针对量化损失）</text>
+  <text x="490" y="212" fill="#555" font-size="11">④ 逐步退火 FakeQuantize → 真实 INT8</text>
+  <text x="490" y="232" fill="#555" font-size="11">⑤ 导出 INT8 模型进行推理</text>
+
+  <text x="490" y="262" fill="#e65100" font-size="11" font-weight="bold">⏱ 耗时：数小时 ~ 数天（需重新训练）</text>
+  <text x="490" y="282" fill="#2e7d32" font-size="11" font-weight="bold">✓ 优点：精度高（接近 FP16 基线）</text>
+  <text x="490" y="302" fill="#e53935" font-size="11" font-weight="bold">⚠ 缺点：训练成本高、对环境要求大</text>
+
+  <!-- Comparison arrow between PTQ and QAT -->
+  <text x="435" y="200" text-anchor="middle" fill="#78909c" font-size="11">VS</text>
+  <line x1="430" y1="210" x2="430" y2="220" stroke="#b0bec5" stroke-width="1"/>
+  <line x1="430" y1="220" x2="470" y2="220" stroke="#b0bec5" stroke-width="1"/>
+  <line x1="470" y1="220" x2="470" y2="230" stroke="#b0bec5" stroke-width="1"/>
+
+  <!-- Section 3: Layer Sensitivity Analysis -->
+  <rect x="30" y="340" width="840" height="130" rx="10" fill="#fff" stroke="#ff7043" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="30" y="340" width="840" height="34" rx="10" fill="#ff7043"/>
+  <rect x="30" y="358" width="840" height="16" fill="#ff7043"/>
+  <text x="450" y="362" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">层敏感性分析 — 哪些层量化后会"炸"？</text>
+
+  <text x="50" y="396" fill="#333" font-size="12">核心诊断指标：</text>
+
+  <!-- Layer sensitivity bar chart -->
+  <text x="50" y="422" fill="#e53935" font-size="11" font-weight="bold">敏感层</text>
+  <rect x="120" y="408" width="50" height="20" rx="3" fill="#e53935" opacity="0.85"/>
+  <text x="145" y="423" text-anchor="middle" fill="#fff" font-size="9">第一层</text>
+  <rect x="175" y="408" width="35" height="20" rx="3" fill="#e53935" opacity="0.7"/>
+  <text x="192" y="423" text-anchor="middle" fill="#fff" font-size="9">输出层</text>
+  <rect x="215" y="408" width="25" height="20" rx="3" fill="#ff7043" opacity="0.7"/>
+
+  <text x="260" y="422" fill="#e65100" font-size="11" font-weight="bold">中等敏感</text>
+  <rect x="340" y="408" width="40" height="20" rx="3" fill="#ffb74d"/>
+  <rect x="385" y="408" width="40" height="20" rx="3" fill="#ffb74d"/>
+  <rect x="430" y="408" width="40" height="20" rx="3" fill="#ffb74d"/>
+  <text x="430" y="423" text-anchor="middle" fill="#fff" font-size="9">中间层</text>
+
+  <text x="490" y="422" fill="#2e7d32" font-size="11" font-weight="bold">不敏感</text>
+  <rect x="560" y="408" width="35" height="20" rx="3" fill="#66bb6a"/>
+  <rect x="600" y="408" width="35" height="20" rx="3" fill="#81c784"/>
+  <rect x="640" y="408" width="35" height="20" rx="3" fill="#a5d6a7"/>
+
+  <!-- Arrow with explanation -->
+  <text x="50" y="452" fill="#555" font-size="11">
+    📌 发现：首尾层（Embedding + LM Head）+ Attention 输出投影是量化最敏感的层
+  </text>
+  <text x="50" y="468" fill="#555" font-size="11">
+    📌 对策：对这些层保持 FP16 / 分配更多 bit width（混合精度量化）
+  </text>
+
+  <!-- Section 4: SmoothQuant Activation Smoothing -->
+  <rect x="30" y="490" width="840" height="130" rx="10" fill="#fff" stroke="#ab47bc" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="30" y="490" width="840" height="34" rx="10" fill="url(#smooth-grad)"/>
+  <rect x="30" y="508" width="840" height="16" fill="url(#smooth-grad)"/>
+  <text x="450" y="512" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">SmoothQuant — 激活平滑转移：把难量化的变成好量化的</text>
+
+  <text x="50" y="544" fill="#333" font-size="12">核心思想：</text>
+  <text x="50" y="566" fill="#555" font-size="11">• 观察：权重分布很平滑（容易量化），激活分布有异常值（很难量化）</text>
+  <text x="50" y="586" fill="#555" font-size="11">• 变换：将激活除以一个平滑因子 s，同时将权重乘以 s → Y = (X/s) · (s·W) = X · W</text>
+
+  <text x="50" y="614" fill="#333" font-size="12" font-weight="bold">数学等价变换：</text>
+  <rect x="50" y="624" width="800" height="30" rx="5" fill="#f3e5f5"/>
+  <text x="450" y="644" text-anchor="middle" fill="#6a1b9a" font-size="13">Y = X · W  ⟹  令  X̂ = X · diag(s)⁻¹  且  Ŵ = diag(s) · W   ⟹  Y = X̂ · Ŵ</text>
+
+  <!-- Flow summary at bottom -->
+  <rect x="30" y="640" width="840" height="90" rx="10" fill="#fff" stroke="#546e7a" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="450" y="662" text-anchor="middle" fill="#37474f" font-size="13" font-weight="bold">比赛中的量化实验策略推荐</text>
+
+  <text x="60" y="686" fill="#555" font-size="11">① 先用 <tspan font-weight="bold" fill="#1e88e5">PTQ + INT8</tspan> 做基线，看精度损失有多大</text>
+  <text x="60" y="706" fill="#555" font-size="11">② 对损失大的层用 <tspan font-weight="bold" fill="#8e24aa">SmoothQuant</tspan> 激活平滑，降低异常值影响</text>
+  <text x="60" y="726" fill="#555" font-size="11">③ 如果精度仍不满足要求，在关键层使用 <tspan font-weight="bold" fill="#43a047">混合精度</tspan>（敏感层 FP16，其余 INT8）或 QAT</text>
+</svg>

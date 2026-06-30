@@ -1700,5 +1700,112 @@ exp/
       ]]></description>
     </item>
 
+    <item>
+      <title>第15天：量化实验与精度对齐 | 零基础精讲</title>
+      <link>https://arxiv.org/abs/2211.10438</link>
+      <guid>weather-learning-day15-2026-06-30</guid>
+      <pubDate>2026-06-30 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+      <h2>今日主题：量化实验与精度对齐 — 从零搞懂 PTQ、QAT 和 SmoothQuant</h2>
+      <p>前面 Day 5 我们学了量化基础——知道了 INT8 量化就是把 FP16 的浮点数压缩成 8 位整数，以及 SmoothQuant 的基本思想。但 Day 5 是"概念科普"，今天我们要进入<strong>"实验设计"</strong>阶段：在比赛中，到底应该怎么做量化实验？PTQ 和 QAT 选哪个？哪些层量化后会精度崩盘？如何用 SmoothQuant 拯救这些层？如何和队友对齐评测流程？</p>
+
+      <h3>一、量化实验的总框架：三选一</h3>
+      <p>在气象大模型的推理部署中，量化只有三条路可以走：</p>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;">
+          <th style="padding:6px;border:1px solid #90caf9;">方法</th><th style="padding:6px;border:1px solid #90caf9;">全称</th><th style="padding:6px;border:1px solid #90caf9;">一句解释</th><th style="padding:6px;border:1px solid #90caf9;">耗时</th><th style="padding:6px;border:1px solid #90caf9;">精度</th>
+        </tr>
+        <tr>
+          <td style="padding:5px;border:1px solid #e0e0e0;"><strong>PTQ</strong></td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">Post-Training Quantization</td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">模型训练完后再量化，不重新训练</td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">⚡ 5-30 分钟</td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">🟡 中等</td>
+        </tr>
+        <tr>
+          <td style="padding:5px;border:1px solid #e0e0e0;"><strong>QAT</strong></td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">Quantization-Aware Training</td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">训练时就模拟量化效果，让模型学会容忍量化误差</td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">🐢 数小时~数天</td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">🟢 高</td>
+        </tr>
+        <tr>
+          <td style="padding:5px;border:1px solid #e0e0e0;"><strong>SmoothQuant</strong></td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">激活平滑量化</td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">数学等价地"平移"量化难度，不改模型结构</td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">⚡ 10-60 分钟</td>
+          <td style="padding:5px;border:1px solid #e0e0e0;">🟢 接近 QAT</td>
+        </tr>
+      </table>
+      <p><strong>比赛中的意义：</strong>先导杯时间窗口有限，推荐路线：PTQ → SmoothQuant → 混合精度 → QAT（最后选项）。</p>
+
+      <h3>二、PTQ 深入拆解</h3>
+      <p><strong>PTQ</strong> 就是"模型训练好之后，再把它压缩成更小的数据类型"。你不需要重新训练模型，只需要准备一小批数据（称为校准集）来观察激活值的分布。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">PTQ 步骤：
+Step 1: 加载训练好的 FP16 模型
+Step 2: 准备校准集（128-512 个样本）
+Step 3: 喂校准集前向传播，收集激活值统计信息
+Step 4: 计算量化参数：scale = max(|x|)/127, zero_point
+Step 5: 将 FP16 权重 → INT8
+Step 6: 验证量化前后的输出差异</pre>
+      <p><strong>Min-Max 校准 vs Percentile 校准：</strong>Min-Max 直接用最大值算 scale，如果有一个 outlier 就会吃掉大部分量化范围。Percentile 用 99.9% 分位数，舍弃最极端的 0.1% outlier，通常好 0.5-1 个百分点。</p>
+
+      <h3>三、层敏感性分析——哪些层量化后会"炸"？</h3>
+      <p>不是所有层对量化的反应都一样。层敏感性就是测量"如果我单独把这一层量化成 INT8，其他层保持 FP16，精度变化多少"。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">逐层量化实验：
+for each layer L in model:
+    model_quantized = quantize_layer(model, L, dtype=INT8)
+    acc_quantized = evaluate(model_quantized, validation_set)
+    sensitivity[L] = acc_baseline - acc_quantized</pre>
+      <p>气象模型中典型敏感层排名：</p>
+      <ol>
+        <li><strong>Patch Embedding（第一层）</strong>— 极高：原始输入分布不均，误差累积到后续所有层</li>
+        <li><strong>Attention 输出投影</strong>— 高：融合多头的输出，容易有 outlier</li>
+        <li><strong>Softmax 输出</strong>— 中等：值域 [0,1] 但部分位置极尖锐</li>
+        <li><strong>LayerNorm</strong>— 低：输出已归一化到近似正态分布</li>
+        <li><strong>MLP 中间层</strong>— 低：权重分布相对均匀</li>
+      </ol>
+      <p><strong>对策：</strong>敏感层用 FP16 保持精度，不敏感层大胆用 INT8 → 混合精度量化。这种方案通常在减少 70-80% 计算量的同时保持精度损失 &lt; 0.5%。</p>
+
+      <h3>四、SmoothQuant 深入</h3>
+      <p>SmoothQuant 的核心洞察：<strong>权重分布很平滑</strong>（好量化），而<strong>激活分布有异常值</strong>（难量化）。能不能把激活的量化难度转移到权重上？数学等价变换：</p>
+      <pre style="background:#f3e5f5;padding:10px;border-radius:6px;font-size:13px;color:#6a1b9a;">Y = X · W  线性层
+
+令 X̂ = X · diag(s)^(-1)   (激活被缩小)
+令 Ŵ  = diag(s) · W        (权重被放大)
+
+则 Y = X̂ · Ŵ ≡ X · W  (完全等价！)</pre>
+      <p>平滑因子 s_j = max(|X_j|)^α / max(|W_j|)^(1-α)，其中 α∈[0,1] 可调（默认取 0.5）。SmoothQuant 对比赛的三大优势：① 无需训练；② 无需改模型结构；③ 即插即用，不与其他压缩方法冲突。</p>
+
+      <h3>五、QAT：最后的杀手锏</h3>
+      <p>如果 PTQ + SmoothQuant + 混合精度的组合都无法满足精度要求，那就用 QAT。QAT 在训练时插入 FakeQuantize 节点模拟 INT8 量化效果，让模型自己"学会"在低精度下保持精度。</p>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">对比项</th><th style="padding:6px;border:1px solid #90caf9;">PTQ</th><th style="padding:6px;border:1px solid #90caf9;">QAT</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">校准集需求</td><td style="padding:5px;border:1px solid #e0e0e0;">128-512 个</td><td style="padding:5px;border:1px solid #e0e0e0;">需完整训练集</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">耗时</td><td style="padding:5px;border:1px solid #e0e0e0;">5-30 分钟</td><td style="padding:5px;border:1px solid #e0e0e0;">数小时~数天</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">INT8 精度</td><td style="padding:5px;border:1px solid #e0e0e0;">RMSE ↑ 1.5-3%</td><td style="padding:5px;border:1px solid #e0e0e0;">RMSE ↑ &lt; 0.5%</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">国产卡可操作性</td><td style="padding:5px;border:1px solid #e0e0e0;">✅ 高</td><td style="padding:5px;border:1px solid #e0e0e0;">⚠ 低</td></tr>
+      </table>
+
+      <h3>六、与精度队友对齐评测流程</h3>
+      <p>比赛中通常有分工：压缩 vs 精度评测。两者必须对齐的 6 个要素：</p>
+      <ol>
+        <li><strong>验证集切片</strong>— 明确哪些时间步做验证</li>
+        <li><strong>评价指标</strong>— 逐变量、逐气压层分别报告 RMSE 和按纬度加权的 ACC</li>
+        <li><strong>精度阈值</strong>— 提前约定可接受的阈值（如 ACC ↓ ≤ 0.5%，RMSE ↑ ≤ 2%）</li>
+        <li><strong>输入输出格式</strong>— 统一使用 NetCDF 或 .npz</li>
+        <li><strong>随机种子</strong>— 固定 seed 采样验证数据</li>
+        <li><strong>实验记录模板</strong>— CSV 共享，记录模型名/参数量/显存/延迟/RMSE/ACC</li>
+      </ol>
+
+      <p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/quantization-experiment.svg" alt="量化实验设计全景图" style="max-width:100%;border-radius:8px;"/></p>
+
+      <hr/>
+      <h3>📅 明日预告（Day 16）：量化实验与精度对齐（续）</h3>
+      <p>明天继续：FP16→INT8 的精度损失分布图绘制方法、逐层诊断快速定位精度瓶颈、感知哈希（Perceptual Hashing）检查量化后气象场的物理合理性。</p>
+      <p>前置知识：今天的 PTQ/QAT/SmoothQuant 内容。</p>
+      ]]></description>
+    </item>
+
   </channel>
 </rss>
