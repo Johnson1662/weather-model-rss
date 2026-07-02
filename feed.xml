@@ -5,7 +5,7 @@
     <link>https://johnson1662.github.io/weather-model-rss/</link>
     <description>围绕2026年先导杯"基于国产科学智算生态的气象大模型推理部署优化"赛题，每日推送一篇零基础精讲文章，覆盖模型压缩、量化、推理加速等理论知识。</description>
     <language>zh-CN</language>
-    <lastBuildDate>2026-07-01 22:00:00 +0800</lastBuildDate>
+    <lastBuildDate>2026-07-02 22:00:00 +0800</lastBuildDate>
     <ttl>1440</ttl>
 
     <item>
@@ -2238,6 +2238,197 @@ def plausibility_check(pred_int8, pred_fp32):
 <h3>📅 明日预告（Day 17-18）：推理引擎 Benchmarking</h3>
 <p>从明天开始进入为期两天的推理引擎 Benchmarking 专题。我们将学习：如何设计公平的 Benchmark（warmup 次数、batch size、序列长度）、Latency vs Throughput 的权衡——比赛评分标准偏向哪个、如何用 PyTorch Profiler 定位训练/推理瓶颈、以及如何向评审展示你的加速成果。</p>
 <p>前置知识：Day 8 的 GPU 内存模型、Day 11-12 的精度验证方法。</p>
+      ]]></description>
+    </item>
+
+    <item>
+      <title>第17天：推理引擎 Benchmarking — 如何科学测量模型速度 | 零基础精讲</title>
+      <link>https://developer.nvidia.com/blog/llm-benchmarking-fundamental-concepts/</link>
+      <guid>weather-learning-day17-2026-07-02</guid>
+      <pubDate>2026-07-02 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+      <h2>今日主题：推理引擎 Benchmarking — 如何科学地测量模型速度</h2>
+      <p>前 16 天我们学习了各种加速技术——剪枝、量化、低秩分解、算子融合、ONNX 优化。但一个根本性问题一直没回答：<strong>做了这些优化之后，模型到底变快了多少？</strong></p>
+      <p>如果没法科学地测量，所有的优化就成了"自我感觉良好"。今天就来系统学习<strong>推理引擎 Benchmarking</strong>——如何用工程化的方法，公平、可复现地测量模型的推理性能。</p>
+
+      <p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/benchmark-workflow.svg" alt="推理引擎 Benchmark 工作流" style="max-width:100%;border-radius:8px;"/></p>
+
+      <hr/>
+
+      <h3>一、为什么需要 Benchmarking？一个真实场景</h3>
+      <p>假设你和队友同时对 Pangu-Weather 做优化：</p>
+      <ul>
+        <li>你用方法 A（剪枝 30%），测出来一次推理花了 120 ms</li>
+        <li>队友用方法 B（量化到 INT8），测出来一次推理花了 95 ms</li>
+        <li>队友说比你快 26%</li>
+      </ul>
+      <p>等等——你的"120ms"是在显卡空载、跑了一次就记录下来的；队友的"95ms"是跑了 200 次、前 50 次当 warm-up、然后取中位数。</p>
+      <p>你们俩的 120 和 95 <strong>根本不能比较</strong>。Benchmarking 就是给所有人定一套<strong>测量规则</strong>，让结果有可比性。</p>
+      <p><strong>比赛中的意义：</strong>先导杯最终提交时，评委会用统一的评测脚本在比赛指定平台上测试。你提前学会设计和执行规范的 benchmark，就能在开发阶段就发现性能瓶颈，不至于到评测现场才暴露问题。</p>
+
+      <hr/>
+
+      <h3>二、三个核心概念：Latency、Throughput、权衡</h3>
+
+      <p><b>1. Latency（延迟）</b>——"一次推理要等多久"</p>
+      <p>你给模型输入当前大气状态，等它返回预测结果，这段时间就是单次延迟。</p>
+      <p><strong>比赛中的意义：</strong>如果模型延迟 &gt; 300ms，就不适合需要快速响应的场景。先导杯通常要求单次推理延迟在合理范围内。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+Latency (ms) = 输出完成时刻 − 输入提交时刻
+衡量单位：毫秒 (ms) 或微秒 (μs)
+典型值：Pangu-Weather ONNX FP16 推理约 80-200 ms（视 GPU 而定）</pre>
+
+      <p><b>2. Throughput（吞吐量）</b>——"单位时间能干多少活"</p>
+      <p>一次推理 100ms，一分钟能做 600 次。如果同时处理 4 个样本，一分钟做完 2400 次。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+Throughput = 处理的样本总数 / 总耗时
+单位：samples/sec 或 inferences/sec
+例子：一次处理 4 个样本耗时 200ms → Throughput = 20 samples/sec</pre>
+
+      <p><b>3. Latency vs Throughput 的权衡</b></p>
+      <ul>
+        <li>batch_size=1: 延迟 100ms，吞吐 10 samples/sec</li>
+        <li>batch_size=4: 延迟 180ms，吞吐 22 samples/sec（吞吐↑但延迟稍增）</li>
+        <li>batch_size=16: 延迟 450ms，吞吐 35 samples/sec（吞吐大增，但延迟也大增）</li>
+      </ul>
+      <p>你不可能同时让延迟最低和吞吐最高。先导杯评分有固定权重，需分析是 latency 权重高还是 throughput 权重高，再针对性优化。</p>
+
+      <hr/>
+
+      <h3>三、设计公平的 Benchmark：评测三要素</h3>
+
+      <p><b>要素 1：预热（Warm-up）</b></p>
+      <p>GPU 第一次推理时有巨大的<strong>"冷启动"开销</strong>：CUDA 驱动初始化、cuBLAS 启发式空间搜索、显存分配、JIT 编译。第一次可能比正常慢 5-10 倍。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+标准做法：正式计时前跑 N 次不算数
+  batch_size=1: 至少 10-30 次 warm-up
+  batch_size=8: 至少 5-10 次 warm-up
+经验法则：warm-up 次数 = 覆盖所有算子至少被调用一次</pre>
+
+      <p><b>要素 2：合适的 Batch Size</b></p>
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">Batch Size</th><th style="padding:6px;border:1px solid #90caf9;">本质瓶颈</th><th style="padding:6px;border:1px solid #90caf9;">评测目的</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">1</td><td style="padding:5px;border:1px solid #e0e0e0;">算子调用开销 + 显存带宽</td><td style="padding:5px;border:1px solid #e0e0e0;">反映真实应用延迟</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">4-8</td><td style="padding:5px;border:1px solid #e0e0e0;">矩阵计算能力 (TFLOPS)</td><td style="padding:5px;border:1px solid #e0e0e0;">中等负载，接近真实部署</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">16-32</td><td style="padding:5px;border:1px solid #e0e0e0;">显存容量 + 通信带宽</td><td style="padding:5px;border:1px solid #e0e0e0;">极限吞吐测试</td></tr>
+      </table>
+
+      <p><b>要素 3：统计稳定性</b></p>
+      <p>GPU 时钟频率波动、温度降频、系统调度抖动都会导致单次测量不一致。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+正确做法：
+1. 重复测量 N 次（N ≥ 100，推荐 200-500）
+2. 剔除前 K 次（warm-up）
+3. 报告均值、中位数、P99、标准差
+
+例子（某模型 batch=1 测 200 次）：
+  均值: 102.3 ms  |  中位数: 98.7 ms  |  P99: 145.2 ms
+  → 大部分时间 ~100ms，但少数情形可能飙到 145ms</pre>
+      <p><strong>比赛中的意义：</strong>如果 P99 远高于均值，说明模型在某些输入下不稳定，需要排查是哪个算子导致。</p>
+
+      <hr/>
+
+      <h3>四、Benchmark 的完整模板（伪代码）</h3>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+1. 加载模型（ONNX / PyTorch），创建固定输入数据
+2. CUDA synchronize，确保之前操作完成
+3. 预热阶段：for i in range(WARMUP_ITER): model(input)
+4. torch.cuda.synchronize()
+5. 正式测量：重复 N 次，记录每次时间
+6. 报告：均值、中位数、P99、标准差、吞吐量</pre>
+
+      <hr/>
+
+      <h3>五、工具链：ONNX Runtime 自带工具</h3>
+
+      <p><b>1. onnxruntime_perf_test（命令行）</b></p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+# GPU 模式
+onnxruntime_perf_test -m times -e cuda -r 500 -i 50 model.onnx
+
+参数说明：
+  -m times    测量延迟模式
+  -e cuda     CUDA 执行提供器
+  -r 500      重复 500 次
+  -i 50       预热 50 次
+  -b 4        批大小 4</pre>
+      <p><strong>比赛中的意义：</strong>这个工具覆盖了 warm-up、重复测量。在比赛平台上跑一次，直接得到标准化报告。</p>
+
+      <p><b>2. ORT Profiling</b></p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+sess_options = ort.SessionOptions()
+sess_options.enable_profiling = True
+sess = ort.InferenceSession("model.onnx", sess_options)
+for _ in range(10):
+    sess.run(None, {"input": data})
+# 输出 JSON → chrome://tracing 可视化</pre>
+      <p>可以看到每个算子的起始时间、耗时、输入形状，像火焰图一样直观。</p>
+
+      <hr/>
+
+      <h3>六、PyTorch Profiler：定位推理瓶颈</h3>
+
+      <p>PyTorch Profiler 能回答三个关键问题：哪个算子最慢？GPU 在计算还是空等？有没有不必要的数据传输？</p>
+
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+with torch.profiler.profile(
+    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    schedule=torch.profiler.schedule(wait=0, warmup=5, active=10),
+) as prof:
+    for _ in range(15):
+        model(input_tensor)
+        prof.step()
+
+print(prof.key_averages().table(sort_by="cuda_time_total"))</pre>
+
+      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
+        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">观察现象</th><th style="padding:6px;border:1px solid #90caf9;">含义</th><th style="padding:6px;border:1px solid #90caf9;">怎么办</th></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">某算子 CPU time 远 &gt; GPU time</td><td style="padding:5px;border:1px solid #e0e0e0;">Kernel launch 开销太大</td><td style="padding:5px;border:1px solid #e0e0e0;">考虑算子融合</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">GPU 时间线有大段空白</td><td style="padding:5px;border:1px solid #e0e0e0;">CPU 准备数据，GPU 空等</td><td style="padding:5px;border:1px solid #e0e0e0;">异步预取、减少同步点</td></tr>
+        <tr><td style="padding:5px;border:1px solid #e0e0e0;">cudaMemcpy 耗时占比高</td><td style="padding:5px;border:1px solid #e0e0e0;">I/O 瓶颈</td><td style="padding:5px;border:1px solid #e0e0e0;">使用 pinned memory</td></tr>
+      </table>
+
+      <hr/>
+
+      <h3>七、气象模型 Benchmark 的特殊考量</h3>
+
+      <p><b>1. 输入形状固定</b>——提前确认比赛要求的输入规格，固定形状测 benchmark。</p>
+
+      <p><b>2. 3D 窗口 Attention 的特征</b></p>
+      <p>Pangu-Weather 的 3D 窗口注意力映射为<strong>多个小 GEMM</strong>（每个窗口一个），而非 1 个大 GEMM。小 GEMM 更容易受 Kernel Launch 开销影响，所以 warm-up 尤其重要。</p>
+      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+全局 Attention → 1 个巨大 GEMM（~3000×3000）
+  优点：GPU 利用率高
+  缺点：O(N²) 复杂度，显存爆炸
+
+3D 窗口 Attention → M 个小 GEMM（~60×60 每个窗口）
+  优点：复杂度可控，支持更大输入
+  缺点：M 次 launch 的总开销可能超过一个大的</pre>
+
+      <p><b>3. 国产卡上的差异</b></p>
+      <ul>
+        <li>同一模型在 NVIDIA 上是计算瓶颈，在国产卡上可能是带宽瓶颈</li>
+        <li>国产卡的算子实现可能不如 cuBLAS 高效，小矩阵性能差距更大</li>
+        <li>有条件的话，在比赛指定平台上做 benchmark 才最有价值</li>
+      </ul>
+
+      <hr/>
+
+      <h3>八、常见误区</h3>
+
+      <ul>
+        <li><b>测一次就够了：</b>GPU 时钟、温度、调度都会造成抖动。单次完全不靠谱。</li>
+        <li><b>不 warm-up 直接测：</b>冷启动开销可能让前几次慢 5-10 倍。</li>
+        <li><b>报最低延迟不报均值：</b>"我的模型只要 50ms"——实际上只是千次最好的那次。</li>
+        <li><b>忽略 CUDA synchronize：</b>GPU Kernel 是异步的，不 synchronize 测的是 CPU 提交时间，不是真实执行时间。</li>
+        <li><b>混淆延迟和吞吐：</b>batch_size=16 的吞吐比 batch_size=1 高 1.5 倍，不代表延迟变快了——延迟其实变大了。</li>
+        <li><b>不同硬件之间直接比较数值：</b>RTX 4090 的 80ms 和海光 DCU 的 120ms 没有直接可比性，硬件平台不同。</li>
+      </ul>
+
+      <hr/>
+      <h3>📅 明日预告（第18天）：推理引擎 Benchmarking — 实战篇</h3>
+      <p>明天继续深入：如何用 PyTorch Profiler 定位具体某个算子的瓶颈、如何设计"压缩-量化-部署"的全流程自动化 Pipeline、版本管理和实验追踪方案。</p>
+      <p>前置知识：会写基本的 Python 脚本和了解深度学习推理流程即可。</p>
       ]]></description>
     </item>
 
