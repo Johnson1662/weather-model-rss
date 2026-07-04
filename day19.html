@@ -1,0 +1,435 @@
+<h2>今日主题：系统集成与自动化 — 从零搭建"压缩-量化-部署"实验管线</h2>
+
+<p>前 18 天我们学了很多"零件"：剪枝、量化、低秩分解、ONNX 导出、GPU 调优、国产卡适配……现在到了关键时刻——<strong>如何把这些零件拼成一条自动化的流水线？</strong></p>
+
+<p>这就好比厨房里你学会了切菜、炒菜、调味、摆盘，但每天点餐的人来了，你还得手忙脚乱地一样一样做。而比赛的时间窗口只有几天，你需要的是<strong>一条完整的"中央厨房"流水线</strong>——输入原始模型，一键输出压缩好、量化好、可在国产卡上运行的最终模型。</p>
+
+<p>今天的内容就是教你怎么搭建这条流水线。</p>
+
+<hr/>
+
+<h3>一、从大赛的工作流程说起</h3>
+
+<p>先导杯的推理部署优化任务，本质上是一个<strong>实验迭代循环</strong>：</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+┌─────────────────────────────────────────────────────┐
+│           比赛工作循环（一次迭代）                      │
+├─────────────────────────────────────────────────────┤
+│                                                       │
+│  原始模型（Pangu-Weather）                             │
+│       │                                               │
+│       ▼                                               │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐        │
+│  │  剪枝     │ →  │  量化     │ →  │  ONNX    │        │
+│  │ (结构化)  │    │ (PTQ/SQ) │    │  导出    │        │
+│  └──────────┘    └──────────┘    └──────────┘        │
+│       │                                               │
+│       ▼                                               │
+│  ┌────────────────────┐                               │
+│  │  国产卡推理验证     │                               │
+│  │  (精度 + 速度)     │                               │
+│  └────────────────────┘                               │
+│       │                                               │
+│       ▼                                               │
+│  ┌────────────────────┐                               │
+│  │  结果记录 & 决策    │  ← 今天讲的核心               │
+│  │  (继续优化/提交)   │                               │
+│  └────────────────────┘                               │
+│                                                       │
+└─────────────────────────────────────────────────────┘
+</pre>
+
+<p>每次从"原始模型"到"国产卡上跑出结果"是一个完整的实验。你需要跑很多次这种实验，调整不同的剪枝率、不同的量化策略……然后比较哪一次最好。</p>
+
+<p><strong>不自动化会怎样？</strong></p>
+<ul>
+  <li>手动修改参数 → 忘记改了什么 → 两个实验结果没法比</li>
+  <li>每次跑完靠记忆写结果 → 写到第三周全忘了</li>
+  <li>队友问"昨天那个剪枝 30% 的实验参数是什么" → 你翻半天没找到</li>
+  <li>提交截止前才发现错了 → 没时间重跑</li>
+</ul>
+
+<p>所以你需要一个<strong>实验管理系统</strong>。任务优先级的排序：</p>
+<ol>
+  <li><strong>能记录：</strong>每个实验的输入（参数）+ 输出（指标）都能保存</li>
+  <li><strong>能查找：</strong>任何时候都能找到"哪个实验最好"</li>
+  <li><strong>能复现：</strong>同样的参数输入，随时能轻松跑出同样结果</li>
+  <li><strong>能对比：</strong>一眼看出不同策略之间的差异</li>
+</ol>
+
+<hr/>
+
+<h3>二、实验跟踪（Experiment Tracking）的原理</h3>
+
+<p>想象你在做蛋糕。从头到尾你做了 10 个蛋糕：</p>
+<ul>
+  <li>第 1 次：面粉 200g，糖 100g → 口感偏干</li>
+  <li>第 2 次：面粉 180g，糖 100g，加一个鸡蛋 → 口感松软</li>
+  <li>第 3 次：面粉 200g，糖 120g → 甜但干</li>
+</ul>
+
+<p>用脑子记这些，到了第 5 个就乱了。你需要一张表：</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">实验编号</th><th style="padding:6px;border:1px solid #90caf9;">面粉(g)</th><th style="padding:6px;border:1px solid #90caf9;">糖(g)</th><th style="padding:6px;border:1px solid #90caf9;">鸡蛋</th><th style="padding:6px;border:1px solid #90caf9;">口感评分</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">1</td><td style="padding:5px;border:1px solid #e0e0e0;">200</td><td style="padding:5px;border:1px solid #e0e0e0;">100</td><td style="padding:5px;border:1px solid #e0e0e0;">0</td><td style="padding:5px;border:1px solid #e0e0e0;">6/10</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">2</td><td style="padding:5px;border:1px solid #e0e0e0;">180</td><td style="padding:5px;border:1px solid #e0e0e0;">100</td><td style="padding:5px;border:1px solid #e0e0e0;">1</td><td style="padding:5px;border:1px solid #e0e0e0;">8/10</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">3</td><td style="padding:5px;border:1px solid #e0e0e0;">200</td><td style="padding:5px;border:1px solid #e0e0e0;">120</td><td style="padding:5px;border:1px solid #e0e0e0;">0</td><td style="padding:5px;border:1px solid #e0e0e0;">5/10</td></tr>
+</table>
+
+<p>实验跟踪就是<strong>为每个模型实验建这样一张卡片</strong>，记录所有相关信息。</p>
+
+<p><strong>在比赛语境下，一张实验卡片需要记录什么？</strong></p>
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">类别</th><th style="padding:6px;border:1px solid #90caf9;">具体字段</th><th style="padding:6px;border:1px solid #90caf9;">为什么重要</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>基本信息</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">实验名称、时间戳、运行人</td><td style="padding:5px;border:1px solid #e0e0e0;">方便查找和区分</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>模型信息</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">模型名、参数量、显存占用</td><td style="padding:5px;border:1px solid #e0e0e0;">判断压缩效果</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>剪枝参数</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝率、剪枝目标（head/channel）、评分方法</td><td style="padding:5px;border:1px solid #e0e0e0;">复现剪枝实验</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>量化参数</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">量化精度、是否 SmoothQuant、校准集</td><td style="padding:5px;border:1px solid #e0e0e0;">复现量化实验</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>推理性能</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">延迟(ms)、吞吐量(帧/秒)、显存峰值</td><td style="padding:5px;border:1px solid #e0e0e0;">比赛评分核心</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>预报精度</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">RMSE、ACC（按变量分别）</td><td style="padding:5px;border:1px solid #e0e0e0;">比赛评分核心</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>部署信息</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">推理引擎、国产卡类型、ONNX opset</td><td style="padding:5px;border:1px solid #e0e0e0;">可复现性</td></tr>
+</table>
+
+<p><strong>比赛中的意义：</strong>每次跑完实验，把上面这张表的字段填好。坚持填 3 天，你就会发现自己<strong>对哪个策略有效、哪个无效已经有了清晰判断</strong>。没有实验跟踪，你就是在"蒙眼做优化"。</p>
+
+<hr/>
+
+<h3>三、实验跟踪的三种实现方式</h3>
+
+<p><strong>方法 1：手动填表（最简单，适合前 5 个实验）</strong></p>
+
+<p>打开一个 Excel/Google Sheets，列头就是你上面那张表的字段。每次跑完实验，手动填一行。</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+| 实验名称 | 剪枝率 | 量化精度 | RMSE(Z500) | ACC(Z500) | 延迟(ms) | 参数量 |
+|---------|-------|---------|-----------|----------|--------|-------|
+| baseline| 0%    | FP32    | 0.0031    | 0.987    | 850    | 64M   |
+| exp01   | 10%   | FP32    | 0.0035    | 0.983    | 720    | 58M   |
+| exp02   | 10%   | INT8    | 0.0042    | 0.978    | 380    | 58M   |
+| exp03   | 20%   | INT8    | 0.0051    | 0.970    | 310    | 51M   |
+</pre>
+
+<p><strong>优点：</strong>零成本、随时可用。<br/>
+<strong>缺点：</strong>忘记填就没了、不好对比、多人协作麻烦。</p>
+
+<p><strong>方法 2：代码自动记录（推荐，适合比赛）</strong></p>
+
+<p>写一个简单的 Python 脚本，每次跑实验时自动把参数和结果写进一个 JSON 文件。</p>
+
+<pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
+{
+  "experiments": [
+    {
+      "id": "exp_001",
+      "timestamp": "2026-07-03 14:30:00",
+      "config": {
+        "pruning_ratio": 0.1,
+        "pruning_target": "head",
+        "importance_score": "taylor",
+        "quantization": {"type": "INT8", "calibration": "500_samples"},
+        "smoothquant": true
+      },
+      "metrics": {
+        "params": 58000000,
+        "memory_mb": 1840,
+        "latency_ms": 720,
+        "throughput_fps": 1.39,
+        "rmse_z500": 0.0035,
+        "acc_z500": 0.983,
+        "rmse_t850": 0.0028
+      },
+      "status": "completed",
+      "onnx_file": "models/exp_001.onnx"
+    }
+  ]
+}
+</pre>
+
+<p>每次实验结束，用 Python 写一个 <code>append_experiment()</code> 函数把新行追加进去。配合一个小脚本 <code>compare.py</code> 就能自动生成对比表。</p>
+
+<p><strong>方法 3：专业跟踪工具（MLflow / Weights & Biases）</strong></p>
+
+<p>像 MLflow（开源）这样的工具为你提供完整的实验管理平台：</p>
+<ul>
+  <li>每次运行自动记录参数、指标、模型文件</li>
+  <li>你可以在 Web 界面中对比不同实验的曲线</li>
+  <li>支持团队共享和一个"模型注册表"（记下哪个模型最好）</li>
+</ul>
+
+<p><strong>比赛中的意义：</strong>推荐从<strong>方法 2（JSON 自动记录）</strong>开始，不依赖外部服务、不怕断网、格式透明。如果团队大、实验多，再升级到方法 3。</p>
+
+<hr/>
+
+<h3>四、设计"压缩-量化-部署"流水线</h3>
+
+<p>流水线的本质是：<strong>把人工操作步骤变成脚本命令</strong>。一条命令就能完成从"原始模型"到"国产卡上跑指标"的全流程。</p>
+
+<p><strong>一条典型流水线的阶段划分：</strong></p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+阶段1：模型准备
+  └─ load Pangu-Weather 预训练权重
+  └─ 剪枝（指定剪枝率和目标）
+       → 输出: pruned_model.pth
+
+阶段2：模型压缩
+  └─ 量化（指定精度和校准集）
+       → 输出: quantized_model.onnx
+  └─ onnxsim 简化
+       → 输出: simplified_model.onnx
+
+阶段3：国产卡部署验证
+  └─ ONNX Runtime（国产卡 EP）
+  └─ 推理测试（指定测试集）
+       → 输出: latency, memory, pred_output.npy
+
+阶段4：精度评估
+  └─ 与真值对比，计算 RMSE / ACC
+       → 输出: metrics.json
+
+阶段5：结果记录
+  └─ 拼接所有指标和参数
+  └─ 追加到实验跟踪文件（JSON/CSV）
+       → 输出: experiments.json
+</pre>
+
+<p>把这 5 个阶段写成 5 个脚本（<code>01_prune.py</code>, <code>02_quantize.py</code>, <code>03_deploy.py</code>, <code>04_evaluate.py</code>, <code>05_log.py</code>），每个脚本独立可运行。</p>
+
+<p>然后用一个<strong>主控脚本</strong>串联它们：</p>
+
+<pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
+# run_pipeline.sh — 一条命令跑完整流程
+python 01_prune.py   --ratio 0.2  --target head    \
+  --input model.pth --output models/pruned_20.pth
+
+python 02_quantize.py --precision INT8             \
+  --input models/pruned_20.pth                     \
+  --calib data/calib_500.npz                       \
+  --output models/exp_001.onnx
+
+python 03_deploy.py --engine onnxruntime           \
+  --model models/exp_001.onnx                      \
+  --backend domestic --output outputs/exp_001/
+
+python 04_evaluate.py --pred outputs/exp_001/      \
+  --groundtruth data/truth.npz                     \
+  --output metrics/exp_001.json
+
+python 05_log.py --config exp_001.json             \
+  --metrics metrics/exp_001.json                   \
+  --dump experiments.json
+</pre>
+
+<p><strong>关键设计原则：</strong></p>
+<ol>
+  <li><strong>单一入口：</strong>修改参数只需改一行（比如把 <code>--ratio 0.2</code> 改成 <code>--ratio 0.3</code>），而不是在代码里搜 search 替换</li>
+  <li><strong>模块可替换：</strong>如果某天你换了一个量化方法（从 PTQ 换成 SmoothQuant），只需改 <code>02_quantize.py</code>，其他脚本不动</li>
+  <li><strong>可恢复：</strong>如果阶段 3 挂了，修好后重新执行 <code>03_deploy.py</code> 就行，不用从头跑</li>
+  <li><strong>隐式版本：</strong>每个实验的输出放在 <code>outputs/exp_XXX/</code> 文件夹下，不会覆盖之前的实验</li>
+</ol>
+
+<p><strong>比赛中的意义：</strong>同一个团队里，有人负责剪枝、有人负责量化。流水线让每个人只管自己的模块，最后在<code>run_pipeline.sh</code>里拼接。这对团队分工至关重要。</p>
+
+<hr/>
+
+<h3>五、版本管理：确保每次实验都可复现</h3>
+
+<p><strong>版本管理的目标：</strong>半年后翻出这个实验，我还能一模一样地跑出来。</p>
+
+<p>需要版本控制的内容：</p>
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">要跟踪什么</th><th style="padding:6px;border:1px solid #90caf9;">用什么管理</th><th style="padding:6px;border:1px solid #90caf9;">为什么要管</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">源代码（脚本、配置文件）</td><td style="padding:5px;border:1px solid #e0e0e0;">Git</td><td style="padding:5px;border:1px solid #e0e0e0;">改了什么代码一清二楚</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">实验配置（剪枝率、量化精度）</td><td style="padding:5px;border:1px solid #e0e0e0;">JSON/YAML 配置文件 + 实验跟踪表</td><td style="padding:5px;border:1px solid #e0e0e0;">复现实验</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">模型权重/ONNX 文件</td><td style="padding:5px;border:1px solid #e0e0e0;">Git LFS 或共享文件夹</td><td style="padding:5px;border:1px solid #e0e0e0;">大文件的版本管理</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">实验记录（指标、图表）</td><td style="padding:5px;border:1px solid #e0e0e0;">JSON/CSV 文件</td><td style="padding:5px;border:1px solid #e0e0e0;">比较不同策略</td></tr>
+</table>
+
+<p><strong>Git 在比赛中的最小用法：</strong></p>
+
+<pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
+# 每次跑实验前，确保代码是干净的
+git status
+
+# 代码有改动？先提交
+git add .
+git commit -m "feat: 添加 SmoothQuant 支持"
+
+# 跑实验
+bash run_pipeline.sh --ratio 0.2
+
+# 跑完后，提交实验记录
+git add experiments.json outputs/exp_001/
+git commit -m "exp_001: 剪枝20% + INT8 量化"
+</pre>
+
+<p>这样每个 Git commit 都对应一个实验。你想找回任意一个实验的原始状态：</p>
+
+<pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
+git checkout &lt;那个实验的commit&gt;
+# 跑一遍，一模一样的结果
+</pre>
+
+<p><strong>比赛中的意义：</strong>提交截止前发现某个结果有问题，你能通过 Git 快速定位"是哪次改动导致了精度下降"，而不是抓瞎从头排查。</p>
+
+<hr/>
+
+<h3>六、一键导出的打包流程</h3>
+
+<p>比赛提交的最终产物是一个<strong>可以被推理引擎直接加载的模型文件</strong>（通常是 ONNX）和一个<strong>推理脚本</strong>。你需要一个打包流程来确保：</p>
+<ul>
+  <li>导出的 ONNX 文件能在目标国产卡上跑通</li>
+  <li>推理脚本的参数、路径都是正确的</li>
+  <li>提交的模型就是"你验证过的最好模型"</li>
+</ul>
+
+<p><strong>标准打包流程：</strong></p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+Step 1: 从实验跟踪表中选出"最佳模型"
+  │  条件：RMSE ≤ baseline × 1.05 且 延迟 ≤ baseline × 0.5
+  │  结果：确定 exp_012 是最优组合
+  ▼
+Step 2: 导出提交版 ONNX
+  │  固定输入 shape（静态 shape 最优）
+  │  检查 ONNX Opset 与国产卡一致
+  ▼
+Step 3: ONNX 兼容性验证
+  │  onnxsim 简化
+  │  onnxruntime 下跑一次推理，对比输出
+  ▼
+Step 4: 打包提交文件
+  │  submit/
+  │  ├── model.onnx        ← 优化后的 ONNX 模型
+  │  ├── inference.py       ← 推理入口脚本
+  │  ├── requirements.txt   ← 依赖清单
+  │  └── README.md          ← 使用说明
+  ▼
+Step 5: 国产卡上做最终验证
+  │  在国产卡上跑 inference.py
+  │  检查输出和精度是否一致
+  ▼
+提交 ✅
+</pre>
+
+<p><strong>比赛中的意义：</strong>很多队伍最后时刻才发现模型导出的 ONNX 在国产卡上跑不了——因为某个算子不支持、因为动态 shape 没固定、因为 opset 版本不一致。"一键打包"流程能在提交前自动检查这些问题。</p>
+
+<hr/>
+
+<h3>七、一个完整的实验跟踪模板（JSON 格式）</h3>
+
+<p>以下是建议的 JSON 模板，可以直接复制到你的项目中使用：</p>
+
+<pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
+{
+  "experiment_id": "exp_012",
+  "timestamp": "2026-07-04 10:00:00",
+  "operator": "zhang_san",
+
+  "pruning": {
+    "ratio": 0.2,
+    "target": "attention_head",
+    "importance": "taylor",
+    "dep_graph_check": true
+  },
+
+  "quantization": {
+    "type": "INT8",
+    "smoothquant": true,
+    "calibration_samples": 500,
+    "calibration_source": "era5_2020_jan",
+    "weight_dtype": "INT8",
+    "activation_dtype": "INT8",
+    "per_channel": true
+  },
+
+  "onnx": {
+    "opset_version": 17,
+    "dynamic_shapes": false,
+    "simplified": true,
+    "node_count_before": 1240,
+    "node_count_after": 876
+  },
+
+  "deployment": {
+    "engine": "ONNX Runtime",
+    "execution_provider": "ROCm",
+    "device": "Hygon Z100",
+    "batch_size": 1,
+    "precision": "INT8"
+  },
+
+  "model_info": {
+    "params_before": 64000000,
+    "params_after": 51200000,
+    "compression_ratio": 0.8,
+    "memory_mb_before": 2560,
+    "memory_mb_after": 1840
+  },
+
+  "perf_metrics": {
+    "latency_ms": {
+      "mean": 380,
+      "p50": 375,
+      "p95": 410,
+      "p99": 450
+    },
+    "throughput_fps": 2.63,
+    "gpu_memory_peak_mb": 1840
+  },
+
+  "accuracy_metrics": {
+    "z500": {"rmse": 0.0042, "acc": 0.978},
+    "t850": {"rmse": 0.0031, "acc": 0.985},
+    "t2m":  {"rmse": 0.0058, "acc": 0.962},
+    "u10":  {"rmse": 0.0062, "acc": 0.955}
+  },
+
+  "status": "completed",
+  "notes": "SmoothQuant 效果明显，INT8 精度损失 &lt; 0.5%",
+  "next_steps": "尝试剪枝 30% + INT8 组合",
+  "submission_file": "submit/exp_012/"
+}
+</pre>
+
+<p>这个模板覆盖了比赛评分可能涉及的所有维度。每次跑完实验后，用一个简单的 Python 脚本来填写这个 JSON。建议放在 <code>experiments/</code> 目录下，每个实验一个独立的 JSON 文件，命名用 <code>exp_001.json, exp_002.json, ...</code>。</p>
+
+<p><strong>比赛中的意义：</strong>提交答辩时，评审可能问"你们尝试过哪些优化组合？为什么选这个？"——有了完整实验跟踪，你只需要打开一个文件夹就能展示所有实验记录，还能直接导出一张对比表。</p>
+
+<hr/>
+
+<h3>八、常用命令行工具速查</h3>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">任务</th><th style="padding:6px;border:1px solid #90caf9;">命令</th><th style="padding:6px;border:1px solid #90caf9;">说明</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">查看所有实验</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>ls experiments/*.json</code></td><td style="padding:5px;border:1px solid #e0e0e0;">列出所有实验记录</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">对比所有实验的 RMSE</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>jq '.accuracy_metrics.z500.rmse' experiments/*.json</code></td><td style="padding:5px;border:1px solid #e0e0e0;">一行命令出对比</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">对比所有实验的延迟</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>jq '.perf_metrics.latency_ms.mean' experiments/*.json</code></td><td style="padding:5px;border:1px solid #e0e0e0;">一行命令出对比</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">按 RMSE 排序找最佳</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>jq -s 'sort_by(.accuracy_metrics.z500.rmse)'</code></td><td style="padding:5px;border:1px solid #e0e0e0;">找到最优实验</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">获取 Git 当前状态</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>git log --oneline -5</code></td><td style="padding:5px;border:1px solid #e0e0e0;">看最近 5 次提交</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX 模型节点数量</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>python -c "import onnx; print(len(onnx.load('m.onnx').graph.node))"</code></td><td style="padding:5px;border:1px solid #e0e0e0;">检查优化效果</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">一键运行所有实验</td><td style="padding:5px;border:1px solid #e0e0e0;"><code>for r in 0.1 0.2 0.3; do bash run_pipeline.sh --ratio $r; done</code></td><td style="padding:5px;border:1px solid #e0e0e0;">批量跑实验</td></tr>
+</table>
+
+<p><strong>比赛中的意义：</strong>比赛最后几天时间紧张。你能用一行命令批量跑 5 个实验并自动记录结果，就比手动跑 5 个实验的队友多出 3 个小时来做分析和答辩准备。</p>
+
+<hr/>
+
+<h3>九、常见误区</h3>
+
+<ol>
+  <li><strong>"实验跟踪太麻烦，我用脑子记就行"</strong>——第 1-3 个实验还行，第 10 个之后你连哪个剪枝率配哪个量化都分不清。</li>
+  <li><strong>"Python 脚本在 Jupyter Notebook 里写死了参数，不用配置文件"</strong>——改参数要在代码里搜索替换，容易漏改。永远把参数写在命令行或 YAML 文件里。</li>
+  <li><strong>"只用 Git 管代码就够了"</strong>——Git 管的是代码版本，你还需要单独管理实验配置和实验结果的对应关系。</li>
+  <li><strong>"流水线写好了就要一次跑通全流程"</strong>——流水线是为了方便迭代。每次改动一个参数就全跑可能太慢，可以只跑受影响的部分。</li>
+  <li><strong>"比赛最后再统一做实验记录"</strong>——到时你会发现自己根本记不清近 20 天的实验细节。每天跑完立刻记录。</li>
+  <li><strong>"实验文件名带 final 就能分清版本"</strong>——只会出现 model_final.onnx, model_final_v2.onnx, model_final_v3_really.onnx。用编号才是正道。</li>
+</ol>
+
+<hr/>
+
+<h3>📅 明日预告（第 20 天）：系统集成与自动化（续）</h3>
+<p>明天继续系统集成话题：如何设计多组 A/B 实验的排列组合？如何从 24 天学习成果中整理出答辩技术路线图？MLOps 在比赛中的完整闭环——从"先跑通"到"系统地寻找最优解"。</p>
+<p>前置知识：今天讲的 JSON 模板和流水线设计。</p>
