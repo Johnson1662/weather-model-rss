@@ -5,7 +5,7 @@
     <link>https://johnson1662.github.io/weather-model-rss/</link>
     <description>围绕2026年先导杯"基于国产科学智算生态的气象大模型推理部署优化"赛题，每日推送一篇零基础精讲文章，覆盖模型压缩、量化、推理加速等理论知识。</description>
     <language>zh-CN</language>
-    <lastBuildDate>2026-07-03 22:00:00 +0800</lastBuildDate>
+    <lastBuildDate>2026-07-05 22:00:00 +0800</lastBuildDate>
     <ttl>1440</ttl>
 
     <item>
@@ -502,964 +502,6 @@ Step 6: 国产卡上 Benchmark + 调优
     </item>
 
     <item>
-      <title>第12天：气象指标与精度验证 — ACC 详解与纬度加权 | 零基础精讲</title>
-      <link>https://climpred.readthedocs.io/en/v1.2.1/metrics.html</link>
-      <guid>weather-learning-day12-2026-06-27</guid>
-      <pubDate>2026-06-27 22:00:00 +0800</pubDate>
-      <description><![CDATA[
-<h2>今日主题：气象指标与精度验证 — ACC 详解与纬度加权</h2>
-
-<p>昨天我们学习了 RMSE 和 ACC 的基本概念。今天深入 ACC（距平相关系数）的数学计算细节，重点讲明白<strong>为什么气象指标必须按纬度加权</strong>，以及比赛验证流程应该如何设计。</p>
-
-<hr/>
-
-<h3>一、ACC 的直观理解</h3>
-
-<p>ACC 回答的是这样一个问题：<strong>你预报的"天气形势"和实际发生的形势有多像？</strong></p>
-
-<p>换句话说：RMSE 看"数值大小对了多少"，ACC 看"空间形态画得像不像"。</p>
-
-<p><strong>比赛中的意义：</strong>模型剪枝或量化后，RMSE 可能轻微上升，但如果 ACC 仍然很高（例如 &gt; 0.95），说明模型对天气系统的大尺度空间结构把握得很好。评委通常两个指标都看。</p>
-
-<hr/>
-
-<h3>二、ACC 的数学公式</h3>
-
-<h3>三、为什么需要纬度加权？</h3>
-
-<p>地球是个球体，而气象网格是等经纬度的。</p>
-<p><strong>问题出在这里：</strong></p>
-<ul>
-  <li>赤道附近的网格（lat=0°）：面积很大</li>
-  <li>南极/北极附近的网格（lat=90°）：面积很小</li>
-</ul>
-<p>如果简单取所有网格点的平均，会<strong>高估高纬度地区的影响</strong>（高纬度有很多密密麻麻的小网格，每个小网格被赋予了和赤道大网格一样的权重）。</p>
-
-<p>解决办法：<strong>按每个网格的 cos(lat) 加权</strong>。</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-纬度加权面积公式：
-weight_i = cos(lat_i) / Σ cos(lat_j)
-
-RMSE_weighted = √( Σ weight_i · (pred_i - obs_i)² )
-ACC_weighted  = Σ weight_i · (pred_i - μ_pred) · (obs_i - μ_obs)
-                / [√( Σ weight_i · (pred_i - μ_pred)² ) · √( Σ weight_i · (obs_i - μ_obs)² )]
-</pre>
-
-<p><strong>比赛中的意义：</strong>如果不做纬度加权，你的指标会被高纬度区域"绑架"——优化了半天高纬度的误差，但赤道附近的大误差被掩盖了。正确的做法是在所有评测脚本中都加上 cos(lat) 加权。</p>
-
-<hr/>
-
-<h3>四、如何在比赛验证中使用这些指标</h3>
-
-<p><strong>验证流程推荐：</strong></p>
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-【每天实验后必做的三件事】
-1. 对当天优化的模型跑一次验证集全量推理
-2. 计算 RMSE 和 ACC（要加权版本），和 baseline 对比
-3. 记录到实验日志中（建议用 CSV 或 JSON 格式）
-</pre>
-
-<p><strong>比赛评分标准的典型权重分布：</strong></p>
-<table style="border-collapse:collapse;width:100%;margin:8px 0;">
-  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">指标</th><th style="padding:6px;border:1px solid #90caf9;">典型权重</th><th style="padding:6px;border:1px solid #90caf9;">说明</th></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">推理速度</td><td style="padding:5px;border:1px solid #e0e0e0;">40%</td><td style="padding:5px;border:1px solid #e0e0e0;">延迟/吞吐量</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">精度（RMSE + ACC）</td><td style="padding:5px;border:1px solid #e0e0e0;">40%</td><td style="padding:5px;border:1px solid #e0e0e0;">需要同时达标</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">创新性/报告</td><td style="padding:5px;border:1px solid #e0e0e0;">20%</td><td style="padding:5px;border:1px solid #e0e0e0;">方案说明文档</td></tr>
-</table>
-
-<hr/>
-
-<h3>五、常见误区</h3>
-<ul>
-  <li><b>RMSE 越低越好，但 ACC 才是关键：</b>只要 RMSE 在合理范围内，ACC 的微小差异直接影响排名。</li>
-  <li><b>不加权：</b>错！所有气象指标都必须纬度加权，这是常识。</li>
-  <li><b>只算一个变量：</b>比赛通常要求多个变量（Z500, T850, T2M, U10）的指标都要达标。</li>
-  <li><b>ACC &gt; 1 不可能：</b>ACC 的范围是 [-1, 1]，越接近 1 越好。如果算出来 &gt; 1，说明公式写错了。</li>
-  <li><b>验证集用训练集数据：</b>绝对不可！必须使用模型没见过的验证数据。</li>
-</ul>
-
-<hr/>
-<h3>📅 明日预告（第13天）：剪枝实验设计</h3>
-<p>明天开始讲如何系统设计剪枝实验：为什么 3D Transformer 剪 head 比剪通道更安全、如何设计剪枝率搜索策略、结构化剪枝后 ONNX 导出的兼容性检查清单。</p>
-<p>前置知识：Day 3 的剪枝基础 + Day 11-12 的指标计算方法。</p>
-      ]]></description>
-    </item>
-
-    <item>
-      <title>第13天：剪枝实验设计 | 零基础精讲</title>
-      <link>https://arxiv.org/abs/1803.03635</link>
-      <guid>weather-learning-day13-2026-06-28</guid>
-      <pubDate>2026-06-28 22:00:00 +0800</pubDate>
-      <description><![CDATA[
-<h2>今日主题：剪枝实验设计 — 从理论知识到系统实验方案</h2>
-
-<p>前面我们学习了剪枝的基础理论（Day 3）和气象指标 RMSE/ACC（Day 11-12）。今天把这两部分结合起来，<strong>设计一套完整的剪枝实验方案</strong>。</p>
-
-<hr/>
-
-<h3>一、为什么在 3D Transformer 上优先剪 Head？</h3>
-
-<p>Pangu-Weather 的每个 Block 包含：<strong>多头注意力 + Feed-Forward Network（全连接前馈网络） + LayerNorm + 残差连接</strong>。</p>
-
-<p><strong>剪 Head 比剪通道更安全，原因有四点：</strong></p>
-<ol>
-  <li><strong>计算图更干净：</strong>Head 的输出在最后会被 concat（拼接），你剪掉一个头，concat 的输入少了一块，但后面的矩阵乘法（输出投影）会自动适应形状。不产生"维度不匹配"。</li>
-  <li><strong>残差不受影响：</strong>剪头只改变 Attention 部分内部，不影响残差连接的分支。</li>
-  <li><strong>物理可解释：</strong>每个注意力头负责捕捉一种大气模式（如"季风-海洋相互作用""地形抬升"），冗余头可以被移除。</li>
-  <li><strong>性能收益直接：</strong>Attention 占推理时间的 70%+，剪头直接减少 QKV 投影和注意力分数计算。</li>
-</ol>
-<p><strong>比赛中的意义：</strong>先选择剪 Head 作为主攻方向。如果剪 Head 到极限还不够，再考虑剪 FFN（Feed-Forward Network，前馈网络）的隐藏层维度。</p>
-
-<hr/>
-
-<h3>二、剪枝率搜索策略</h3>
-
-<p><strong>核心问题：剪多少合适？</strong>剪太少 - 提速不明显。剪太多 - 精度崩了。答案是：<strong>从少到多逐步试，找到精度拐点</strong>。</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-推荐搜索序列（针对每个 Block 或 Stage）：
-0%  →  10%  →  20%  →  30%  →  40%  →  50%
-
-在每个剪枝率下：
-1. 执行剪枝
-2. 微调（可选，视比赛规则）
-3. 在验证集上计算 RMSE 和 ACC
-4. 记录到实验表
-
-精度拐点：RMSE 突然跳升或 ACC 突然下降的点。
-通常 30-40% 是 3D Transformer Head 的合理剪枝上限。
-</pre>
-
-<hr/>
-
-<h3>三、剪枝后 ONNX 导出检查清单</h3>
-
-<table style="border-collapse:collapse;width:100%;margin:8px 0;">
-  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">检查项</th><th style="padding:6px;border:1px solid #90caf9;">预期结果</th><th style="padding:6px;border:1px solid #90caf9;">异常处理</th></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">PyTorch 前向正常</td><td style="padding:5px;border:1px solid #e0e0e0;">输出 shape 正确</td><td style="padding:5px;border:1px solid #e0e0e0;">检查 DepGraph 是否遗漏耦合层</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">torch.onnx.export 成功</td><td style="padding:5px;border:1px solid #e0e0e0;">无错误退出</td><td style="padding:5px;border:1px solid #e0e0e0;">降低 opset_version 或调整 dynamic_axes</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">onnxsim 简化成功</td><td style="padding:5px;border:1px solid #e0e0e0;">节点数减少 20-40%</td><td style="padding:5px;border:1px solid #e0e0e0;">检查是否有不被支持的算子</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX Runtime 推理正常</td><td style="padding:5px;border:1px solid #e0e0e0;">与 PyTorch 输出一致</td><td style="padding:5px;border:1px solid #e0e0e0;">检查精度差异是否过大</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ONNX 输出 RMSE/ACC</td><td style="padding:5px;border:1px solid #e0e0e0;">与 PyTorch baseline 接近</td><td style="padding:5px;border:1px solid #e0e0e0;">如果误差大，需检查 ONNX 算子精度</td></tr>
-</table>
-
-<p><strong>比赛中的意义：</strong>这个检查清单就是你的"剪枝部署流水线"。每次改完剪枝配置，按这个顺序跑一遍，确保每个环节没问题。</p>
-
-<hr/>
-
-<h3>四、实验记录表模板</h3>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-| 实验ID | 剪枝率 | 方法 | Params(M) | Latency(ms) | RMSE(Z500) | ACC(Z500) | 备注 |
-|--------|--------|------|-----------|-------------|------------|-----------|------|
-| B001   | 0%     | baseline | 256     | 120        | 0.825      | 0.984     | 原始模型 |
-| B002   | 10%    | head     | 230     | 108        | 0.828      | 0.982     | 无明显损失 |
-| B003   | 20%    | head     | 204     | 95         | 0.835      | 0.978     | 精度拐点前 |
-| B004   | 30%    | head     | 179     | 82         | 0.852      | 0.967     | 轻微损失 |
-| B005   | 40%    | head     | 153     | 70         | 0.912      | 0.932     | ⚠️ 精度骤降！ |
-</pre>
-
-<p><strong>比赛中的意义：</strong>每次实验都记录这样的表格，最终答辩时可以直接展示。先导杯评委喜欢看"系统性的实验对比"。</p>
-
-<hr/>
-
-<h3>五、常见误区</h3>
-<ul>
-  <li><b>一开始就剪太多：</b>从 10% 开始逐步增加，找到精度拐点比一次性剪到位更安全。</li>
-  <li><b>忽略不同 Stage 的差异：</b>Stage 1-2 剪头的代价可能比 Stage 3-4 大，可以尝试非均匀剪枝。</li>
-  <li><b>只剪 Head 不剪其他：</b>经济允许的情况下，Head + FFN 共同剪枝可以获得更高的压缩比。</li>
-  <li><b>不记录 baseline：</b>所有实验都要从同一个 baseline 开始，剪枝前的指标必须记录。</li>
-</ul>
-
-<hr/>
-<h3>📅 明日预告（第14天）：剪枝实验设计 — 进阶篇</h3>
-<p>明天继续深入：彩票假设（Lottery Ticket Hypothesis）在气象模型上的验证、剪枝后微调策略、结构化剪枝后的国产卡兼容性实测清单。</p>
-<p>前置知识：Day 13 的剪枝实验设计基础。</p>
-      ]]></description>
-    </item>
-
-    <item>
-      <title>第14天：剪枝实验设计进阶 — Lottery Ticket 与国产卡兼容性 | 零基础精讲</title>
-      <link>https://arxiv.org/abs/1803.03635</link>
-      <guid>weather-learning-day14-2026-06-29</guid>
-      <pubDate>2026-06-29 22:00:00 +0800</pubDate>
-      <description><![CDATA[
-<h2>今日主题：剪枝实验设计进阶 — Lottery Ticket 假设、微调策略和国产卡兼容性</h2>
-
-<p>今天在 Day 13 的基础上，深入三个关键话题：<strong>Lottery Ticket 假设</strong>如何指导我们找到最优子网络、<strong>剪枝后微调</strong>的正确姿势、以及<strong>剪枝模型在国产卡上的兼容性检查清单</strong>。</p>
-
-<hr/>
-
-<h3>一、彩票假设（Lottery Ticket Hypothesis）</h3>
-
-<p><strong>核心思想：</strong>一个随机初始化的大型神经网络中，存在一个<strong>稀疏的子网络</strong>——中奖彩票（winning ticket）——如果单独训练这个子网络（保持初始化的权重不变），它能达到甚至超过原始大型网络的准确率。</p>
-
-<p>用大白话说：<strong>大模型里面藏着一个小模型，只是你不知道它藏在哪里。</strong></p>
-
-<p><strong>彩票假设的典型验证流程：</strong></p>
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-1. 随机初始化模型，记录初始权重 W₀
-2. 训练到收敛，得到权重 W*
-3. 计算每个权重的重要性（Taylor 评分），剪掉最不重要的 p%
-4. 把剩下权重的值<strong>重置为初始值 W₀</strong>（不是 W*！）
-5. 重新训练这个子网络
-6. 如果精度和原始大网络相当，就找到了一个"中奖彩票"
-</pre>
-
-<p><strong>比赛中的意义：</strong>彩票假设给我们的启发是：<strong>剪枝后是否需要微调？</strong>答案：大概率需要。如果重新初始化后训练能追上原始精度，说明微调可以恢复大部分精度损失。</p>
-
-<hr/>
-
-<h3>二、剪枝后微调策略</h3>
-
-<p><strong>方案 A：不微调（One-shot，一次完成）</strong></p>
-<p>直接剪枝 + 导出 ONNX + 部署。适合剪枝率低（≤10%）的场景。</p>
-
-<p><strong>方案 B：轻量微调（Lightweight Fine-tuning）</strong></p>
-<p>剪枝后，用较小的学习率（如原始学习率的 1/10）跑少量训练步。</p>
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-剪枝 → 低学习率微调（1-5 个 epoch）→ 验证精度 → 导出 ONNX
-</pre>
-
-<p><strong>方案 C：逐步剪枝（Iterative Pruning）</strong></p>
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-训练 → 剪 10% → 微调 → 再剪 10% → 再微调 → ...（直到目标剪枝率）
-</pre>
-<p><strong>比赛中的意义：</strong>如果比赛规则允许微调（通常允许），推荐方案 B——轻量微调，不需要跑全部训练数据，1-5 个 epoch 即可恢复大部分精度。</p>
-
-<hr/>
-
-<h3>三、结构化剪枝后国产卡兼容性检查清单</h3>
-
-<p>这是先导杯特有的考量：你的剪枝模型必须在国产卡上部署。</p>
-
-<table style="border-collapse:collapse;width:100%;margin:8px 0;">
-  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">检查维度</th><th style="padding:6px;border:1px solid #90caf9;">风险点</th><th style="padding:6px;border:1px solid #90caf9;">解决方案</th></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">算子覆盖</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝后模型含特殊 shape 的算子</td><td style="padding:5px;border:1px solid #e0e0e0;">导出 ONNX 后用国产引擎的兼容性工具扫描</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">动态 shape</td><td style="padding:5px;border:1px solid #e0e0e0;">国产引擎对动态 shape 支持较弱</td><td style="padding:5px;border:1px solid #e0e0e0;">导出时固定 batch_size 和序列长度</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">精度对齐</td><td style="padding:5px;border:1px solid #e0e0e0;">国产卡 FP16 / INT8 实现差异</td><td style="padding:5px;border:1px solid #e0e0e0;">在国产卡上验证 RMSE/ACC</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">内存占用</td><td style="padding:5px;border:1px solid #e0e0e0;">国产显卡显存可能有限</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝后测量显存占用，确保不超限</td></tr>
-</table>
-
-<p><strong>比赛中的意义：</strong>建议剪枝实验的每一步都在目标国产卡上验证一次。否则可能出现在 NVIDIA 上好端端的模型，到国产卡上就报错或精度骤降。</p>
-
-<hr/>
-
-<h3>四、14 天总结与下一步</h3>
-
-<p>至此，剪枝相关的理论知识全部学完。接下来我们将进入<strong>量化实验</strong>阶段。</p>
-
-<p><strong>剪枝阶段你已经掌握的知识：</strong></p>
-<ul>
-  <li>结构化 vs 非结构化剪枝及其适用场景</li>
-  <li>DepGraph 如何解决 Residual 对齐</li>
-  <li>Taylor 二阶重要性评分原理</li>
-  <li>Lottery Ticket 假设及其对微调的启示</li>
-  <li>剪枝率搜索策略和实验记录方法</li>
-  <li>剪枝后 ONNX 导出和国产卡兼容性检查清单</li>
-</ul>
-
-<hr/>
-<h3>📅 明日预告（第15天）：量化实验与精度对齐</h3>
-<p>明天开始讲 FP16 → INT8 的精度分布、哪些层最敏感、PTQ（Post-Training Quantization，训练后量化）和 QAT（Quantization-Aware Training，量化感知训练）的区别。</p>
-<p>前置知识：Day 5 的量化基础 + Day 13-14 的剪枝实验方法。</p>
-      ]]></description>
-    </item>
-
-    <item>
-      <title>第15天：量化实验与精度对齐 — PTQ vs QAT | 零基础精讲</title>
-      <link>https://arxiv.org/abs/2211.10438</link>
-      <guid>weather-learning-day15-2026-06-30</guid>
-      <pubDate>2026-06-30 22:00:00 +0800</pubDate>
-      <description><![CDATA[
-<h2>今日主题：量化实验与精度对齐 — PTQ vs QAT 实战方案设计</h2>
-
-<p>前面我们学了量化的基础知识（Day 5）——什么是对称/非对称量化、什么是激活值异常值、SmoothQuant 如何平滑这些异常值。</p>
-
-<p>今天进入<strong>量化实验设计</strong>。重点讲两个量化方法的对比：<strong>PTQ（Post-Training Quantization，训练后量化）</strong>和 <strong>QAT（Quantization-Aware Training，量化感知训练）</strong>，以及气象模型量化时哪些层最敏感。</p>
-
-<hr/>
-
-<h3>一、PTQ vs QAT：一句话区别</h3>
-
-<p><strong>PTQ（训练后量化）</strong>：模型训练好之后，直接拿一小部分数据跑一遍，统计激活值的分布，算出 scale 和 zero_point，然后直接量化。</p>
-<p><strong>QAT（量化感知训练）</strong>：在训练过程中模拟量化误差，让模型"学会"在量化下依然工作良好。</p>
-
-<table style="border-collapse:collapse;width:100%;margin:8px 0;">
-  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">维度</th><th style="padding:6px;border:1px solid #90caf9;">PTQ</th><th style="padding:6px;border:1px solid #90caf9;">QAT</th></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">需要的数据量</td><td style="padding:5px;border:1px solid #e0e0e0;">很少（几十到几百个样本）</td><td style="padding:5px;border:1px solid #e0e0e0;">需要完整训练集</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">需要的计算量</td><td style="padding:5px;border:1px solid #e0e0e0;">极小（一次前向推理）</td><td style="padding:5px;border:1px solid #e0e0e0;">大（完整微调）</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">INT8 精度保留</td><td style="padding:5px;border:1px solid #e0e0e0;">通常 0.5-2% 精度损失</td><td style="padding:5px;border:1px solid #e0e0e0;">几乎无损（0.1-0.5%）</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">比赛适用性</td><td style="padding:5px;border:1px solid #e0e0e0;"><strong>高（推荐首选）</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">中（时间充裕时使用）</td></tr>
-</table>
-
-<p><strong>比赛中的意义：</strong>先导杯时间有限，建议先用 PTQ 快速拿到 INT8 模型。如果 PTQ 精度损失不可接受，再上 QAT。</p>
-
-<hr/>
-
-<h3>二、FP16 → INT8 的精度损失分布</h3>
-
-<p>不是所有的层对量化都一样敏感。在 Transformer 类模型中，精度损失主要集中在：</p>
-
-<ol>
-  <li><strong>Attention 输出投影层：</strong>最敏感。这部分处理的是多头注意力的汇聚结果，分布范围广。</li>
-  <li><strong>FFN 的第二全连接层：</strong>次敏感。GELU 激活后的值分布偏斜。</li>
-  <li><strong>LayerNorm 的 gamma/beta：</strong>最不敏感。因为 LayerNorm 的输出已经被归一化了。</li>
-</ol>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-[Pangu-Weather 各层量化敏感度]（经验排序，从高到低）
-Stage 4 的 Attention 输出投影  ★★★★★  最敏感
-Stage 4 的 FFN 第二层          ★★★★
-Stage 3 的 Attention 输出投影  ★★★★
-Stage 3 的 FFN 第二层          ★★★
-Stage 2 的 Attention           ★★
-Stage 1 的 Attention           ★
-LayerNorm 的 gamma/beta        ☆（几乎无损）
-</pre>
-
-<p><strong>比赛中的意义：</strong>如果 INT8 精度损失大了，不要对所有层都做 QAT——只对敏感层做混合精度（保持 FP16），大部分层做 INT8，这样精度和速度之间取得平衡。</p>
-
-<hr/>
-
-<h3>三、精度对齐流程</h3>
-
-<p>你和精度验证的队友需要对齐以下三点：</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-【对齐检查清单】
-□ 使用同一份验证集（固定时间范围、固定变量）
-□ 使用相同的 RMSE/ACC 实现（相同的纬度加权）
-□ 设定"通过"阈值（例如：INT8 的 RMSE 不超过 FP16 的 +2%）
-</pre>
-
-<p><strong>比赛中的意义：</strong>精度对齐不是技术问题，是沟通问题。建议团队内用同一个验证脚本、同一份数据、同一组指标，避免"你的精度和我的精度不一样"的争论。</p>
-
-<hr/>
-
-<h3>四、量化实验记录表</h3>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-| 实验ID | 精度类型 | 方法 | Latency(ms) | 显存(GB) | RMSE(Z500) | ACC(Z500) |
-|--------|----------|------|-------------|----------|------------|-----------|
-| Q001   | FP32     | baseline | 120      | 8.2      | 0.825      | 0.984     |
-| Q002   | FP16     | AMP     | 65        | 4.3      | 0.826      | 0.984     |
-| Q003   | INT8     | PTQ    | 45        | 2.5      | 0.841      | 0.978     |
-| Q004   | INT8     | PTQ+SmoothQuant | 45 | 2.5 | 0.832 | 0.981 |
-| Q005   | INT8     | QAT    | 45        | 2.5      | 0.828      | 0.983     |
-</pre>
-
-<hr/>
-
-<h3>五、常见误区</h3>
-<ul>
-  <li><b>INT8 一定比 FP16 快 2 倍：</b>不一定。INT8 主要受益于更小的内存带宽占用和 Tensor Core INT8 计算。如果带宽没瓶颈，加速比可能只有 1.3-1.5x。</li>
-  <li><b>PTQ 不需要数据：</b>错！PTQ 需要一小部分校准数据（calibration data）来统计激活分布。数据越有代表性越好。</li>
-  <li><b>QAT 一定比 PTQ 好：</b>QAT 效果好但成本高。而且 QAT 后的模型如果重新导出 ONNX，可能因为 fusing 方式不同而精度变化。</li>
-  <li><b>所有层用同一个量化配置：</b>建议给敏感层设置更细的量化粒度（per-channel 替代 per-tensor）。</li>
-</ul>
-
-<hr/>
-<h3>📅 明日预告（第16天）：量化实验进阶与 SmoothQuant 实战</h3>
-<p>明天深入讲 SmoothQuant 在 Pangu-Weather 上的具体实现细节：如何计算迁移系数、如何在 ONNX 中实现平滑后的网络、以及 FP16 和 INT8 的精度差异溯源方法。</p>
-<p>前置知识：Day 15 的量化实验设计 + Day 5 的量化基础。</p>
-      ]]></description>
-    </item>
-
-    <item>
-      <title>第16天：量化实验进阶 — SmoothQuant 实战与精度差异溯源 | 零基础精讲</title>
-      <link>https://arxiv.org/abs/2211.10438</link>
-      <guid>weather-learning-day16-2026-07-01</guid>
-      <pubDate>2026-07-01 22:00:00 +0800</pubDate>
-      <description><![CDATA[
-<h2>今日主题：量化实验进阶 — SmoothQuant 实战与精度差异溯源</h2>
-
-<p>昨天我们比较了 PTQ 和 QAT，知道了"先 PTQ，不行再 QAT"的策略。今天深入讲三个实操层面的关键问题：</p>
-<ol>
-  <li><strong>SmoothQuant 的迁移系数 α</strong> 怎么选？</li>
-  <li>平滑后的网络在 <strong>ONNX 中如何表示</strong>？</li>
-  <li><strong>FP16 和 INT8 的精度差异</strong>怎么系统性地溯源？</li>
-</ol>
-
-<p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/quantization-experiment.svg" alt="量化实验流程" style="max-width:100%;border-radius:8px;"/></p>
-
-<hr/>
-
-<h3>一、SmoothQuant 的迁移系数 α</h3>
-
-<p>SmoothQuant 中引入了一个超参数 α（范围 0~1），控制"多少异常值从激活迁移到权重"。</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-迁移系数公式：
-s_j = max(|X_j|)^α / max(|W_j|)^(1-α)
-其中 X_j 是第 j 个输出通道的激活值，W_j 是第 j 个输入通道的权重
-
-α = 0.5：所有通道均匀迁移
-α = 0.0：不移迁移，仅对权重做平滑
-α = 1.0：完全迁移到权重，激活变成全均匀
-</pre>
-
-<p>在 LLM 上，通常 α=0.5 效果最好。但在 Pangu-Weather 这类气象模型上，建议尝试 α=0.25、0.5、0.75。</p>
-
-<p><strong>比赛中的意义：</strong>α 是 SmoothQuant 唯一需要调试的超参数。在少量验证数据上快速扫一遍 α 值（0.25, 0.5, 0.75），看哪个让 PTQ 后的 RMSE 最低。</p>
-
-<hr/>
-
-<h3>二、平滑后的网络在 ONNX 中的实现</h3>
-
-<p>SmoothQuant 的数学变换是<strong>完全等价的</strong>——只是把计算图中的 Scale 操作提前了。</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-原始计算图：X → Linear(W) → Y  (激活有异常值，量化困难)
-
-SmoothQuant 后：X → Mul(s_j) → Linear(W/s_j) → Y
-                   ↑             ↑
-              激活被缩放    权重被压缩
-</pre>
-
-<p>在 ONNX 中的视觉变化：</p>
-<ul>
-  <li><strong>插入</strong>一个新的 Mul 节点（乘 s_j）在输入之前</li>
-  <li><strong>修改</strong> Linear 的权重为 W/s_j</li>
-  <li><strong>不改变</strong>输出 Y 的数学值</li>
-</ul>
-
-<p><strong>比赛中的意义：</strong>SmoothQuant 不需要修改推理引擎，因为它只是对模型权重做了带缩放的重写，然后配一个乘性前处理。这个操作在 ONNX 中就是"加一个 Mul 节点，改一下权重"——你甚至可以离线修改 ONNX proto 文件来实现。</p>
-
-<hr/>
-
-<h3>三、精度差异的系统性溯源方法</h3>
-
-<p>当你发现 INT8 比 FP16 精度差了不少，怎么找出是"哪个层"的问题？</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-【分层精度溯源法】
-Step 1: 同时跑 FP16 和 INT8 推理，打印每一层的输出
-Step 2: 计算每一层的 Signal-to-Noise Ratio（SNR）
-Step 3: 找到 SNR 最低的那层（量化误差最大）
-Step 4: 对该层单独提高精度（per-channel INT8 或保留 FP16）
-</pre>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-SNR 计算公式（对每层的输出张量）：
-SNR = 10 * log10( Var(signal) / Var(noise) )
-其中 noise = FP16_output - INT8_output
-
-经验阈值：
-SNR &gt; 30 dB → 安全
-20 dB &lt; SNR &lt; 30 dB → 需要关注
-SNR &lt; 20 dB → 该层严重受损，必须做混合精度！
-</pre>
-
-<p><strong>比赛中的意义：</strong>用 SNR 分层溯源法，你可以精准定位"是哪个 Stage 的哪个 Linear 层量化后炸了"，而不是盲目调优。</p>
-
-<hr/>
-
-<h3>四、量化实验的完整流程</h3>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-[量化实验流程]
-1. 准备校准数据（从验证集中抽 100-500 个样本）
-2. 跑 FP16 baseline，记录每层激活分布
-3. 尝试 PTQ（默认 per-tensor INT8）
-4. 计算 RMSE/ACC，看是否在可接受范围内
-5. 若精度不可接受：
-   a. 做分层 SNR 溯源
-   b. 尝试 SmoothQuant（α=0.5）
-   c. 对敏感层做 per-channel 量化或混合精度
-6. 导出 INT8 ONNX → 在国产卡上验证
-</pre>
-
-<hr/>
-
-<h3>五、常见误区</h3>
-<ul>
-  <li><b>SmoothQuant 只在 LLM 上有效：</b>不，SmoothQuant 适用于所有 Transformer，包括 Pangu-Weather。</li>
-  <li><b>校准数据越多越好：</b>500 个样本足够了。太多反而可能稀释代表性分布。</li>
-  <li><b>INT8 精度一定比 FP16 差：</b>在部分层上，量化后的"噪声"可能意外起到正则化作用，反而更好。</li>
-  <li><b>精度对齐是赛后的事：</b>错！应该把它嵌入到每日实验流程中。</li>
-</ul>
-
-<hr/>
-
-<h3>📅 明日预告（第17天）：推理引擎 Benchmarking — 如何科学测量模型速度</h3>
-<p>明天进入推理引擎性能评测——延迟、吞吐量、warm-up、统计稳定性的完整方法，以及 ONNX Runtime 的 benchmark 工具使用。</p>
-<p>前置知识：Day 8 的 GPU 内存模型、Day 11-12 的精度验证方法。</p>
-      ]]></description>
-    </item>
-
-    <item>
-      <title>第17天：推理引擎 Benchmarking — 如何科学测量模型速度 | 零基础精讲</title>
-      <link>https://developer.nvidia.com/blog/llm-benchmarking-fundamental-concepts/</link>
-      <guid>weather-learning-day17-2026-07-02</guid>
-      <pubDate>2026-07-02 22:00:00 +0800</pubDate>
-      <description><![CDATA[
-      <h2>今日主题：推理引擎 Benchmarking — 如何科学地测量模型速度</h2>
-      <p>前 16 天我们学习了各种加速技术——剪枝、量化、低秩分解、算子融合、ONNX 优化。但一个根本性问题一直没回答：<strong>做了这些优化之后，模型到底变快了多少？</strong></p>
-      <p>如果没法科学地测量，所有的优化就成了"自我感觉良好"。今天就来系统学习<strong>推理引擎 Benchmarking</strong>——如何用工程化的方法，公平、可复现地测量模型的推理性能。</p>
-
-      <p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/benchmark-workflow.svg" alt="推理引擎 Benchmark 工作流" style="max-width:100%;border-radius:8px;"/></p>
-
-      <hr/>
-
-      <h3>一、为什么需要 Benchmarking？一个真实场景</h3>
-      <p>假设你和队友同时对 Pangu-Weather 做优化：</p>
-      <ul>
-        <li>你用方法 A（剪枝 30%），测出来一次推理花了 120 ms</li>
-        <li>队友用方法 B（量化到 INT8），测出来一次推理花了 95 ms</li>
-        <li>队友说比你快 26%</li>
-      </ul>
-      <p>等等——你的"120ms"是在显卡空载、跑了一次就记录下来的；队友的"95ms"是跑了 200 次、前 50 次当 warm-up、然后取中位数。</p>
-      <p>你们俩的 120 和 95 <strong>根本不能比较</strong>。Benchmarking 就是给所有人定一套<strong>测量规则</strong>，让结果有可比性。</p>
-      <p><strong>比赛中的意义：</strong>先导杯最终提交时，评委会用统一的评测脚本在比赛指定平台上测试。你提前学会设计和执行规范的 benchmark，就能在开发阶段就发现性能瓶颈，不至于到评测现场才暴露问题。</p>
-
-      <hr/>
-
-      <h3>二、三个核心概念：Latency、Throughput、权衡</h3>
-
-      <p><b>1. Latency（延迟）</b>——"一次推理要等多久"</p>
-      <p>你给模型输入当前大气状态，等它返回预测结果，这段时间就是单次延迟。</p>
-      <p><strong>比赛中的意义：</strong>如果模型延迟 &gt; 300ms，就不适合需要快速响应的场景。先导杯通常要求单次推理延迟在合理范围内。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-Latency (ms) = 输出完成时刻 − 输入提交时刻
-衡量单位：毫秒 (ms) 或微秒 (μs)
-典型值：Pangu-Weather ONNX FP16 推理约 80-200 ms（视 GPU 而定）</pre>
-
-      <p><b>2. Throughput（吞吐量）</b>——"单位时间能干多少活"</p>
-      <p>一次推理 100ms，一分钟能做 600 次。如果同时处理 4 个样本，一分钟做完 2400 次。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-Throughput = 处理的样本总数 / 总耗时
-单位：samples/sec 或 inferences/sec
-例子：一次处理 4 个样本耗时 200ms → Throughput = 20 samples/sec</pre>
-
-      <p><b>3. Latency vs Throughput 的权衡</b></p>
-      <ul>
-        <li>batch_size=1: 延迟 100ms，吞吐 10 samples/sec</li>
-        <li>batch_size=4: 延迟 180ms，吞吐 22 samples/sec（吞吐↑但延迟稍增）</li>
-        <li>batch_size=16: 延迟 450ms，吞吐 35 samples/sec（吞吐大增，但延迟也大增）</li>
-      </ul>
-      <p>你不可能同时让延迟最低和吞吐最高。先导杯评分有固定权重，需分析是 latency 权重高还是 throughput 权重高，再针对性优化。</p>
-
-      <hr/>
-
-      <h3>三、设计公平的 Benchmark：评测三要素</h3>
-
-      <p><b>要素 1：预热（Warm-up）</b></p>
-      <p>GPU 第一次推理时有巨大的<strong>"冷启动"开销</strong>：CUDA 驱动初始化、cuBLAS 启发式空间搜索、显存分配、JIT 编译。第一次可能比正常慢 5-10 倍。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-标准做法：正式计时前跑 N 次不算数
-  batch_size=1: 至少 10-30 次 warm-up
-  batch_size=8: 至少 5-10 次 warm-up
-经验法则：warm-up 次数 = 覆盖所有算子至少被调用一次</pre>
-
-      <p><b>要素 2：合适的 Batch Size</b></p>
-      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
-        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">Batch Size</th><th style="padding:6px;border:1px solid #90caf9;">本质瓶颈</th><th style="padding:6px;border:1px solid #90caf9;">评测目的</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">1</td><td style="padding:5px;border:1px solid #e0e0e0;">算子调用开销 + 显存带宽</td><td style="padding:5px;border:1px solid #e0e0e0;">反映真实应用延迟</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">4-8</td><td style="padding:5px;border:1px solid #e0e0e0;">矩阵计算能力 (TFLOPS)</td><td style="padding:5px;border:1px solid #e0e0e0;">中等负载，接近真实部署</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">16-32</td><td style="padding:5px;border:1px solid #e0e0e0;">显存容量 + 通信带宽</td><td style="padding:5px;border:1px solid #e0e0e0;">极限吞吐测试</td></tr>
-      </table>
-
-      <p><b>要素 3：统计稳定性</b></p>
-      <p>GPU 时钟频率波动、温度降频、系统调度抖动都会导致单次测量不一致。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-正确做法：
-1. 重复测量 N 次（N ≥ 100，推荐 200-500）
-2. 剔除前 K 次（warm-up）
-3. 报告均值、中位数、P99、标准差
-
-例子（某模型 batch=1 测 200 次）：
-  均值: 102.3 ms  |  中位数: 98.7 ms  |  P99: 145.2 ms
-  → 大部分时间 ~100ms，但少数情形可能飙到 145ms</pre>
-      <p><strong>比赛中的意义：</strong>如果 P99 远高于均值，说明模型在某些输入下不稳定，需要排查是哪个算子导致。</p>
-
-      <hr/>
-
-      <h3>四、Benchmark 的完整模板（伪代码）</h3>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-1. 加载模型（ONNX / PyTorch），创建固定输入数据
-2. CUDA synchronize，确保之前操作完成
-3. 预热阶段：for i in range(WARMUP_ITER): model(input)
-4. torch.cuda.synchronize()
-5. 正式测量：重复 N 次，记录每次时间
-6. 报告：均值、中位数、P99、标准差、吞吐量</pre>
-
-      <hr/>
-
-      <h3>五、工具链：ONNX Runtime 自带工具</h3>
-
-      <p><b>1. onnxruntime_perf_test（命令行）</b></p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# GPU 模式
-onnxruntime_perf_test -m times -e cuda -r 500 -i 50 model.onnx
-
-参数说明：
-  -m times    测量延迟模式
-  -e cuda     CUDA 执行提供器
-  -r 500      重复 500 次
-  -i 50       预热 50 次
-  -b 4        批大小 4</pre>
-      <p><strong>比赛中的意义：</strong>这个工具覆盖了 warm-up、重复测量。在比赛平台上跑一次，直接得到标准化报告。</p>
-
-      <p><b>2. ORT Profiling</b></p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-sess_options = ort.SessionOptions()
-sess_options.enable_profiling = True
-sess = ort.InferenceSession("model.onnx", sess_options)
-for _ in range(10):
-    sess.run(None, {"input": data})
-# 输出 JSON → chrome://tracing 可视化</pre>
-      <p>可以看到每个算子的起始时间、耗时、输入形状，像火焰图一样直观。</p>
-
-      <hr/>
-
-      <h3>六、PyTorch Profiler：定位推理瓶颈</h3>
-
-      <p>PyTorch Profiler 能回答三个关键问题：哪个算子最慢？GPU 在计算还是空等？有没有不必要的数据传输？</p>
-
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-with torch.profiler.profile(
-    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-    schedule=torch.profiler.schedule(wait=0, warmup=5, active=10),
-) as prof:
-    for _ in range(15):
-        model(input_tensor)
-        prof.step()
-
-print(prof.key_averages().table(sort_by="cuda_time_total"))</pre>
-
-      <table style="border-collapse:collapse;width:100%;margin:8px 0;">
-        <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">观察现象</th><th style="padding:6px;border:1px solid #90caf9;">含义</th><th style="padding:6px;border:1px solid #90caf9;">怎么办</th></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">某算子 CPU time 远 &gt; GPU time</td><td style="padding:5px;border:1px solid #e0e0e0;">Kernel launch 开销太大</td><td style="padding:5px;border:1px solid #e0e0e0;">考虑算子融合</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">GPU 时间线有大段空白</td><td style="padding:5px;border:1px solid #e0e0e0;">CPU 准备数据，GPU 空等</td><td style="padding:5px;border:1px solid #e0e0e0;">异步预取、减少同步点</td></tr>
-        <tr><td style="padding:5px;border:1px solid #e0e0e0;">cudaMemcpy 耗时占比高</td><td style="padding:5px;border:1px solid #e0e0e0;">I/O 瓶颈</td><td style="padding:5px;border:1px solid #e0e0e0;">使用 pinned memory</td></tr>
-      </table>
-
-      <hr/>
-
-      <h3>七、气象模型 Benchmark 的特殊考量</h3>
-
-      <p><b>1. 输入形状固定</b>——提前确认比赛要求的输入规格，固定形状测 benchmark。</p>
-
-      <p><b>2. 3D 窗口 Attention 的特征</b></p>
-      <p>Pangu-Weather 的 3D 窗口注意力映射为<strong>多个小 GEMM</strong>（每个窗口一个），而非 1 个大 GEMM。小 GEMM 更容易受 Kernel Launch 开销影响，所以 warm-up 尤其重要。</p>
-      <pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-全局 Attention → 1 个巨大 GEMM（~3000×3000）
-  优点：GPU 利用率高
-  缺点：O(N²) 复杂度，显存爆炸
-
-3D 窗口 Attention → M 个小 GEMM（~60×60 每个窗口）
-  优点：复杂度可控，支持更大输入
-  缺点：M 次 launch 的总开销可能超过一个大的</pre>
-
-      <p><b>3. 国产卡上的差异</b></p>
-      <ul>
-        <li>同一模型在 NVIDIA 上是计算瓶颈，在国产卡上可能是带宽瓶颈</li>
-        <li>国产卡的算子实现可能不如 cuBLAS 高效，小矩阵性能差距更大</li>
-        <li>有条件的话，在比赛指定平台上做 benchmark 才最有价值</li>
-      </ul>
-
-      <hr/>
-
-      <h3>八、常见误区</h3>
-
-      <ul>
-        <li><b>测一次就够了：</b>GPU 时钟、温度、调度都会造成抖动。单次完全不靠谱。</li>
-        <li><b>不 warm-up 直接测：</b>冷启动开销可能让前几次慢 5-10 倍。</li>
-        <li><b>报最低延迟不报均值：</b>"我的模型只要 50ms"——实际上只是千次最好的那次。</li>
-        <li><b>忽略 CUDA synchronize：</b>GPU Kernel 是异步的，不 synchronize 测的是 CPU 提交时间，不是真实执行时间。</li>
-        <li><b>混淆延迟和吞吐：</b>batch_size=16 的吞吐比 batch_size=1 高 1.5 倍，不代表延迟变快了——延迟其实变大了。</li>
-        <li><b>不同硬件之间直接比较数值：</b>RTX 4090 的 80ms 和海光 DCU 的 120ms 没有直接可比性，硬件平台不同。</li>
-      </ul>
-
-      <hr/>
-      <h3>📅 明日预告（第18天）：推理引擎 Benchmarking — 实战篇</h3>
-      <p>明天继续深入：如何用 PyTorch Profiler 定位具体某个算子的瓶颈、如何设计"压缩-量化-部署"的全流程自动化 Pipeline、版本管理和实验追踪方案。</p>
-      <p>前置知识：会写基本的 Python 脚本和了解深度学习推理流程即可。</p>
-      ]]></description>
-    </item>
-
-    <item>
-      <title>第18天：推理引擎 Benchmarking — Profiler 深度分析与自动化 Pipeline | 零基础精讲</title>
-      <link>https://apxml.com/courses/advanced-pytorch/chapter-4-deployment-performance-optimization/pytorch-profiler</link>
-      <guid>weather-learning-day18-2026-07-03</guid>
-      <pubDate>2026-07-03 22:00:00 +0800</pubDate>
-      <description><![CDATA[
-<h2>今日主题：推理引擎 Benchmarking — PyTorch Profiler 深度分析与自动化部署 Pipeline</h2>
-
-<p>昨天我们学习了 Benchmarking 的基础——Latency、Throughput、Warm-up、Batch Size 等概念。今天继续深入，讲三个更关键的实操话题：</p>
-<ol>
-  <li><strong>PyTorch Profiler 深度分析</strong>——如何用 Profiler 精确定位哪个算子是瓶颈</li>
-  <li><strong>从 Profiling 到优化的闭环流程</strong>——发现瓶颈后应该怎么办</li>
-  <li><strong>"压缩-量化-部署"全流程自动化 Pipeline</strong>——以及版本管理和实验追踪方案</li>
-</ol>
-
-<p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/benchmark-workflow.svg" alt="推理引擎 Benchmark 工作流" style="max-width:100%;border-radius:8px;"/></p>
-
-<hr/>
-
-<h3>一、PyTorch Profiler 深度分析</h3>
-
-<p>Day 17 介绍了 Profiler 的基本用法。今天详细讲如何<strong>阅读 Profiler 的输出</strong>，以及如何从输出中找到性能瓶颈。</p>
-
-<h4>1.1 理解 Profiler 的输出：key_averages 表</h4>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
--------------------------------------  ------------  ------------  ------------  ------------
-Name                                      Self CPU %      CPU total %     CUDA total %    # Calls
--------------------------------------  ------------  ------------  ------------  ------------
-aten::convolution                            0.14%         17.21%          81.90%        20
-aten::cudnn_convolution                      0.00%          0.00%          81.72%        20
-aten::addmm                                  0.06%          1.12%           4.97%         1
-aten::mm                                     0.00%          0.00%           4.96%         1
-aten::add_                                   0.13%          0.51%           3.48%        21
-aten::relu                                   0.12%          0.28%           1.91%        16
-aten::_native_batch_norm_legit_no_...        0.10%          1.99%           1.85%        20
--------------------------------------  ------------  ------------  ------------  ------------
-Self CUDA time total: 44.08ms
-</pre>
-
-<p>这张表看四个关键列：</p>
-<ul>
-  <li><strong>Name：</strong>算子名字。aten:: 是 PyTorch 的原生 C++ 算子命名空间。</li>
-  <li><strong>Self CPU %：</strong>该算子自身占用的 CPU 时间比例。高 → Kernel Launch 开销大。</li>
-  <li><strong>CUDA total %：</strong>该算子在 GPU 上的执行时间比例。高 → 这个算子是计算主力。</li>
-  <li><strong># Calls：</strong>被调用了多少次。如果某个不重要的小算子被调了成千上万次，就是融合机会。</li>
-</ul>
-
-<p><strong>读取技巧：</strong></p>
-<p>先看 CUDA total %——哪几个算子加起来占了 80% 以上，它们就是优化的主战场。比如上例中 convolution 占 81.9%，这就是瓶颈。</p>
-<p>然后看 Self CPU %——如果某个算子 CPU 占比远高于 CUDA 占比，说明 kernel launch 开销相对计算来说太大了。在 Pangu-Weather 的 3D 窗口 Attention 中，这就是常见情况：每个小窗口的注意力需要一次独立的 kernel launch。</p>
-
-<p><strong>比赛中的意义：</strong>学会读这张表，你就知道你的模型"时间花在哪里了"。不用猜，不用凭感觉——Profiler 告诉你答案。</p>
-
-<h4>1.2 Chrome Trace 可视化：看时间线上的"空隙"</h4>
-
-<p>除了 key_averages 表，Profiler 还能生成 <strong>Chrome Trace</strong>（JSON 格式），用浏览器打开 chrome://tracing 或者用 Perfetto 在线工具（ui.perfetto.dev）查看。</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# 导出 Chrome Trace
-prof.export_chrome_trace("model_trace.json")
-</pre>
-
-<p>在时间线视图中，你会看到：</p>
-<ul>
-  <li><strong>CPU 线程行：</strong>长条表示 CPU 操作，短条密集区域表示大量小操作</li>
-  <li><strong>GPU 流行：</strong>彩条表示 GPU 上执行的 CUDA Kernel</li>
-  <li><strong>GPU 空闲：</strong>GPU 流上的空白区域，说明 GPU 在等 CPU 喂数据</li>
-</ul>
-
-<p><strong>典型问题的时间线表现：</strong></p>
-<table style="border-collapse:collapse;width:100%;margin:8px 0;">
-  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">现象</th><th style="padding:6px;border:1px solid #90caf9;">原因</th><th style="padding:6px;border:1px solid #90caf9;">解决方案</th></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">GPU 流频繁空白</td><td style="padding:5px;border:1px solid #e0e0e0;">CPU 来不及 launch kernel</td><td style="padding:5px;border:1px solid #e0e0e0;">算子融合、减少小算子数量</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">cudaMemcpy 长条</td><td style="padding:5px;border:1px solid #e0e0e0;">频繁 CPU-GPU 数据传输</td><td style="padding:5px;border:1px solid #e0e0e0;">使用 pinned memory、避免 .item()/.cpu()</td></tr>
-  <tr><td style="padding:5px;border:1px solid #e0e0e0;">某算子（如 Attention）占比异常高</td><td style="padding:5px;border:1px solid #e0e0e0;">该算子实现效率低</td><td style="padding:5px;border:1px solid #e0e0e0;">用更高效的实现替换（如 FlashAttention）</td></tr>
-</table>
-
-<p><strong>比赛中的意义：</strong>Chrome Trace 是 Profiler 最有价值的输出。比赛阶段建议每天优化后都导出一次 trace，和你做优化前的 trace 对比，确认"瓶颈确实被解决了"。</p>
-
-<hr/>
-
-<h3>二、从 Profiling 到优化的闭环流程</h3>
-
-<p>找到瓶颈之后，下一步怎么办？你需要一个<strong>可复现的优化循环</strong>。</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-【优化五步循环】
-Step 1: Profile → 跑一次 Profiler，看 key_averages 和 Chrome Trace
-Step 2: Analyze → 识别 Top-3 最耗时的算子
-Step 3: Hypothesize → 针对每个瓶颈算子，提出优化假设
-   - "这个 Attention 小 GEMM 太多 → 试试算子融合"
-   - "这个 LayerNorm 每次都重新计算 → 试试融合到前一层"
-Step 4: Apply → 实施优化（修改模型/导出配置/加融合规则）
-Step 5: Re-profile → 再跑 Profiler，验证假设是否正确
-   - 如果瓶颈解决了 → 继续下一个瓶颈
-   - 如果没解决 → 回去修改假设
-</pre>
-
-<p><strong>比赛中的意义：</strong>不要一次性把所有优化都做了——你可能做了不需要的优化，还引入了 bug。一次只改一个东西，Profile 验证，再改下一个。</p>
-
-<hr/>
-
-<h3>三、"压缩-量化-部署"全流程自动化 Pipeline</h3>
-
-<p>前面的学习我们都按步骤来：先剪枝、再量化、再导出 ONNX、再做 benchmark。但当你需要反复试不同配置时，手动走一遍太慢了。</p>
-
-<p>解决方案：<strong>设计一个自动化 Pipeline</strong>。</p>
-
-<h4>3.1 Pipeline 的阶段划分</h4>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-[阶段 1：模型准备]
-输入：原始 Pangu-Weather 权重 (.pth)
-输出：压缩后的模型（剪枝/量化）
-
-[阶段 2：ONNX 导出]
-输入：压缩后的 PyTorch 模型
-输出：ONNX 模型 + 简化后 ONNX
-
-[阶段 3：精度验证]
-输入：ONNX 模型 + 验证数据
-输出：RMSE/ACC 指标报告
-
-[阶段 4：性能测试]
-输入：ONNX 模型
-输出：Latency、Throughput、显存报告
-
-[阶段 5：报告生成]
-输入：所有实验结果
-输出：实验对比表 + 决策建议
-</pre>
-
-<h4>3.2 推荐的 Pipeline 实现方式</h4>
-
-<p><strong>选项 A：Makefile</strong></p>
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# Makefile 示例
-all: export onnx-simplify validate benchmark report
-
-export:
-    python scripts/export_onnx.py --model configs/prune_30.yaml
-
-onnx-simplify:
-    python -m onnxsim models/compressed.onnx models/simplified.onnx
-
-validate:
-    python scripts/validate.py --model models/simplified.onnx --output results/val.json
-
-benchmark:
-    onnxruntime_perf_test -m times -e cuda -r 500 -i 50 models/simplified.onnx
-
-report:
-    python scripts/generate_report.py --input results/
-</pre>
-
-<p><strong>选项 B：Python 脚本链式调用</strong></p>
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# pipeline.py 示例（伪代码）
-def run_pipeline(config):
-    # 1. 模型压缩
-    model = compress_model(config.prune_rate, config.quantization)
-
-    # 2. 导出 ONNX
-    onnx_path = export_onnx(model, config.opset)
-
-    # 3. 简化
-    simplified = simplify_onnx(onnx_path)
-
-    # 4. 验证精度
-    metrics = validate(simplified)
-
-    # 5. Benchmark
-    perf = benchmark(simplified)
-
-    # 6. 记录实验
-    save_experiment(config, metrics, perf)
-
-    return metrics, perf
-</pre>
-
-<p><strong>比赛中的意义：</strong>推荐选项 A（Makefile），因为 Makefile 天然支持增量执行（只有某一步的输入变了才会重跑）。你改了剪枝率，只需要重新 export_onnx，后面几步自动重新跑。</p>
-
-<hr/>
-
-<h3>四、版本管理与实验追踪方案</h3>
-
-<p>比赛中你会反复试验不同配置：不同剪枝率 × 不同量化方法 × 不同 batch size。如果不做系统记录，一周后你根本记不清"上次那个效果不错的是哪个配置"。</p>
-
-<h4>4.1 实验记录结构</h4>
-
-<p>用 <strong>CSV 或 JSON</strong> 文件记录每次实验：</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-# experiments.csv 示例
-experiment_id,date,model,prune_rate,quantization,latency_ms,throughput,memory_gb,rmse_z500,acc_z500,notes
-EXP001,2026-07-01,pangu-baseline,0%,FP32,120.0,8.3,8.2,0.825,0.984,"原始模型"
-EXP002,2026-07-01,pangu-prune-head,20%,FP32,95.0,10.5,6.5,0.835,0.978,"剪枝20%"
-EXP003,2026-07-02,pangu-prune-head,20%,INT8-PTQ,45.0,22.2,2.5,0.841,0.978,"剪枝20%+量化"
-EXP004,2026-07-02,pangu-prune-head,20%,INT8-PTQ-SQ,45.0,22.2,2.5,0.832,0.981,"加了SmoothQuant"
-</pre>
-
-<h4>4.2 模型版本管理</h4>
-
-<p>每次实验保存的文件名应该包含所有关键参数：</p>
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-建议命名规范：
-  {模型名}_p{剪枝率}_q{量化方法}_b{batch_size}.onnx
-
-例如：
-  pangu_prune30_int8_bs4.onnx
-  pangu_prune20_fp16_bs1.onnx
-</pre>
-
-<p><strong>比赛中的意义：</strong>当你在最终提交前需要回顾时，打开 CSV 表一目了然。评委提问"你试过哪些剪枝率？"你说"从小到大扫了 5 个点，实验记录在这里"——这是专业团队的表现。</p>
-
-<hr/>
-
-<h3>五、优化闭环案例：Pangu-Weather 的 3D 窗口 Attention</h3>
-
-<p>用我们学到的完整闭环，分析一个真实场景：</p>
-
-<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
-【案例：3D 窗口 Attention 太慢怎么办？】
-
-Step 1 - Profile：发现 Attention 占 CUDA time 的 75%
-  其中 aten::bmm（批量矩阵乘）占大头
-  每个窗口的 QKᵀ 是独立小 GEMM
-
-Step 2 - Analyze：瓶颈是"大量小 GEMM 的 kernel launch 开销"
-
-Step 3 - Hypothesize：
-  假设 A）减少窗口数量（需要改模型架构，风险大）
-  假设 B）把所有窗口的 Attention 计算合并成一个大的 batch GEMM
-
-Step 4 - Apply：
-  将 M 个窗口的 QKᵀ 合并为一次大的 batch_gemm 调用
-  输入形状从 [M, seq_len, d_h] → [1, M*seq_len, d_h]
-
-Step 5 - Re-profile：
-  Attention 的 CUDA time 从 75% 降到 55%
-  整体延迟从 120ms 降到 95ms
-</pre>
-
-<p><strong>比赛中的意义：</strong>这个闭环就是你在先导杯中的日常工作模式。每次优化都走完这五步，保证每一步都是"数据驱动"而不是"猜测驱动"。</p>
-
-<hr/>
-
-<h3>六、第 17-18 天总结</h3>
-
-<p>至此，"推理引擎 Benchmarking"的学习全部完成。你掌握了：</p>
-<ul>
-  <li>Latency（延迟）和 Throughput（吞吐量）的定义和权衡</li>
-  <li>公平 Benchmark 的三要素：Warm-up、Batch Size、统计稳定性</li>
-  <li>PyTorch Profiler 输出阅读方法（key_averages 表和 Chrome Trace）</li>
-  <li>从 Profiling 到优化的五步闭环流程</li>
-  <li>自动化 Pipeline 的设计（Makefile 方案）</li>
-  <li>实验记录和模型版本管理的最佳实践</li>
-  <li>气象模型 Benchmark 的特殊性（3D 窗口 Attention 的小 GEMM 问题）</li>
-</ul>
-
-<hr/>
-
-<h3>七、常见误区</h3>
-<ul>
-  <li><b>Profiler 只跑一次就够了：</b>Profiler 本身有开销，建议至少跑两次——一次不加 record_shapes/with_stack 粗略看，一次精细分析。</li>
-  <li><b>只关注 GPU 时间不看 CPU：</b>在国产卡上，CPU 瓶颈可能比 GPU 瓶颈更严重——因为国产卡的 kernel launch 开销可能更大。</li>
-  <li><b>Pipeline 一次性写完美：</b>先写一个简单版（如上面脚本），跑通了再逐步完善。完美主义是比赛的大敌。</li>
-  <li><b>实验记录靠脑子记：</b>绝对不要！每次实验都要记录。哪怕是"试了 5 分钟就删掉了的配置"，记下来为什么放弃也很有价值。</li>
-  <li><b>模型命名随意：</b>"model_final.onnx"、"model_final_v2.onnx"、"model_real_final.onnx"——这是团队协作混乱的信号。</li>
-</ul>
-
-<hr/>
-<h3>📅 明日预告（第19天）：系统集成与自动化 — MLOps 思维在比赛中的应用</h3>
-<p>明天进入第三阶段的最后两天的内容：如何用 MLOps 方法管理整个比赛实验流程——自动化 Pipeline 的进阶实现、版本管理升级方案、以及"一键导出可提交模型"的打包流程设计。</p>
-<p>前置知识：Day 17-18 的 Benchmarking 方法和实验追踪思想。</p>
-      ]]></description>
-    </item>
-
-    <item>
       <title>第19天：系统集成与自动化 | 零基础精讲</title>
       <link>https://johnson1662.github.io/weather-model-rss/day19.html</link>
       <guid>weather-learning-day19-2026-07-04</guid>
@@ -1726,6 +768,279 @@ Step 5: 国产卡上做最终验证 → 提交 ✅
 <hr/>
 <h3>📅 明日预告（第 20 天）：系统集成与自动化（续）</h3>
 <p>明天继续：如何设计多组 A/B 实验的排列组合？如何准备答辩的技术路线图和实验数据表？从 24 天学习到比赛提交的完整收官流程。</p>
+      ]]></description>
+    </item>
+
+    <item>
+      <title>第20天：系统集成与自动化（续）— Makefile、A/B 实验与最终冲刺 | 零基础精讲</title>
+      <link>https://johnson1662.github.io/weather-model-rss/</link>
+      <guid>weather-learning-day20-2026-07-05</guid>
+      <pubDate>2026-07-05 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+<h2>今日主题：系统集成与自动化（续）— Makefile 管线、A/B 实验设计与最终冲刺规划</h2>
+
+<p>昨天我们搭建了实验跟踪系统和初步的 Shell 脚本流水线。今天继续深入两个关键工程问题：<strong>如何用 Makefile 把管线管理得更优雅</strong>、<strong>如何高效设计多组 A/B 实验找出最优配置</strong>，以及 <strong>最后几天的收官冲刺计划</strong>。</p>
+
+<p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/experiment-pipeline.svg" alt="实验管线设计与排列组合自动化" style="max-width:100%;border-radius:8px;"/></p>
+
+<hr/>
+
+<h3>一、Shell 脚本 vs Makefile：谁更适合比赛？</h3>
+
+<p>昨天我们用 Shell 脚本（run_pipeline.sh）串起了 5 个阶段。这已经很好了，但有一个缺点：<strong>如果你改了某个阶段的代码，你不知道哪些阶段需要重新运行</strong>。</p>
+
+<p><strong>Makefile</strong> 是 Unix 世界一个古老而强大的工具（诞生于 1976 年），它的核心能力就是<strong>依赖追踪</strong>——它知道哪个文件依赖哪个文件，只重新运行那些输入发生了变化的步骤。</p>
+
+<p>来看一个比赛用的 Makefile 示例：</p>
+
+<pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
+# Makefile — 气象模型压缩-部署管线
+SHELL := /bin/bash
+RATIO ?= 0.2
+PRECISION ?= INT8
+
+# 默认目标
+all: submit_package
+
+# 阶段 1：剪枝 — 输入原始权重，输出剪枝后权重
+models/pruned_$(RATIO).pth: model.pth
+    python scripts/01_prune.py --ratio $(RATIO) \
+        --input $< --output $@
+
+# 阶段 2：量化 — 输入剪枝后权重，输出 ONNX 模型
+models/exp_$(RATIO)_$(PRECISION).onnx: models/pruned_$(RATIO).pth
+    python scripts/02_quantize.py --precision $(PRECISION) \
+        --input $< --output $@
+
+# 阶段 3：部署 — ONNX → 推理结果
+outputs/exp_$(RATIO)/pred.npy: models/exp_$(RATIO)_$(PRECISION).onnx
+    python scripts/03_deploy.py --model $< \
+        --output outputs/exp_$(RATIO)/
+
+# 阶段 4：评估 — 推理结果 → 指标
+metrics/exp_$(RATIO)_$(PRECISION).json: outputs/exp_$(RATIO)/pred.npy
+    python scripts/04_evaluate.py --pred $< \
+        --groundtruth data/truth.npz --output $@
+
+# 阶段 5：打包 — 生成提交包
+submit_package: metrics/exp_$(RATIO)_$(PRECISION).json
+    python scripts/05_package.py \
+        --model models/exp_$(RATIO)_$(PRECISION).onnx \
+        --config configs/exp_config.json \
+        --output submit/exp_$(RATIO)_$(PRECISION)/
+</pre>
+
+<p><strong>Makefile 在这里的优势：</strong></p>
+<ul>
+  <li><strong>增量构建</strong>：修改了剪枝脚本后重新 make，只有阶段 1 重新跑，阶段 2-5 自动跳过（只要它们的输出文件还在且没过时）</li>
+  <li><strong>参数化</strong>：<code>make RATIO=0.3 PRECISION=FP16</code> 就能跑不同配置</li>
+  <li><strong>并行构建</strong>：<code>make -j4</code> 可以同时跑多个无依赖的实验</li>
+</ul>
+
+<p><strong>比赛中的意义：</strong>Makefile 的\"只重跑改了的东西\"能帮你节省大量等待时间。特别是调试阶段，你改一行代码 -> 等待 20 分钟重新跑完整个管线 -> 发现又改一行 -> 又等 20 分钟。有了 Makefile，只有改的那个阶段及其下游阶段需要重跑。</p>
+
+<hr/>
+
+<h3>二、A/B 实验设计：如何找到最优配置</h3>
+
+<p>到了比赛第 20 天，你手上有多种\"武器\"可用：</p>
+<ul>
+  <li><strong>剪枝：</strong>不同剪枝率（10%, 20%, 30%）和剪枝目标（head / channel）</li>
+  <li><strong>量化：</strong>FP16、INT8 PTQ、INT8 + SmoothQuant</li>
+  <li><strong>低秩分解（可选）：</strong>对特定权重矩阵做 SVD 低秩替换</li>
+</ul>
+
+<p>排列组合一下，可能就有几十种配置。你需要一个系统的方法来找到<strong>帕累托最优（Pareto Optimal）</strong>配置——即\"在精度损失可接受的情况下，推理速度最快\"的配置。</p>
+
+<h4>2.1 格点搜索（Grid Search）</h4>
+
+<p>最直观的方法：对所有可能的组合逐一测试。</p>
+
+<pre style="background:#1a1a2e;color:#fff;padding:10px;border-radius:6px;font-size:13px;">
+# 批量跑 剪枝率 × 量化精度 的格点搜索
+for ratio in 0.0 0.1 0.2 0.3; do
+  for precision in FP16 INT8; do
+    make RATIO=$ratio PRECISION=$precision
+    echo "ratio=$ratio prec=$precision $done"
+  done
+done
+</pre>
+
+<p>规划你的实验矩阵：</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">实验组</th><th style="padding:6px;border:1px solid #90caf9;">剪枝率</th><th style="padding:6px;border:1px solid #90caf9;">量化</th><th style="padding:6px;border:1px solid #90caf9;">低秩</th><th style="padding:6px;border:1px solid #90caf9;">目的</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">A（基线）</td><td style="padding:5px;border:1px solid #e0e0e0;">0%</td><td style="padding:5px;border:1px solid #e0e0e0;">FP32</td><td style="padding:5px;border:1px solid #e0e0e0;">无</td><td style="padding:5px;border:1px solid #e0e0e0;">精度 + 速度参考线</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">B</td><td style="padding:5px;border:1px solid #e0e0e0;">10%</td><td style="padding:5px;border:1px solid #e0e0e0;">FP16</td><td style="padding:5px;border:1px solid #e0e0e0;">无</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝下限效果</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">C</td><td style="padding:5px;border:1px solid #e0e0e0;">20%</td><td style="padding:5px;border:1px solid #e0e0e0;">FP16</td><td style="padding:5px;border:1px solid #e0e0e0;">无</td><td style="padding:5px;border:1px solid #e0e0e0;">中等剪枝</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">D</td><td style="padding:5px;border:1px solid #e0e0e0;">30%</td><td style="padding:5px;border:1px solid #e0e0e0;">FP16</td><td style="padding:5px;border:1px solid #e0e0e0;">无</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝上限（找拐点）</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">E</td><td style="padding:5px;border:1px solid #e0e0e0;">10%</td><td style="padding:5px;border:1px solid #e0e0e0;">INT8</td><td style="padding:5px;border:1px solid #e0e0e0;">无</td><td style="padding:5px;border:1px solid #e0e0e0;">轻量剪枝 + 量化</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">F</td><td style="padding:5px;border:1px solid #e0e0e0;">20%</td><td style="padding:5px;border:1px solid #e0e0e0;">INT8+SQ</td><td style="padding:5px;border:1px solid #e0e0e0;">无</td><td style="padding:5px;border:1px solid #e0e0e0;">中等剪枝 + SmoothQuant</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">G</td><td style="padding:5px;border:1px solid #e0e0e0;">20%</td><td style="padding:5px;border:1px solid #e0e0e0;">INT8+SQ</td><td style="padding:5px;border:1px solid #e0e0e0;">SVD(ratio=0.3)</td><td style="padding:5px;border:1px solid #e0e0e0;">全堆叠效果</td></tr>
+</table>
+
+<p><strong>分析实验结果——找拐点：</strong></p>
+<p>把每个实验的 <strong>推理延迟（ms）</strong>和 <strong>RMSE</strong> 画在二维图上：</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+      RMSE ↑（越差）
+         │
+   0.010 │            D
+         │
+   0.008 │       C     G
+         │
+   0.006 │  B     F
+         │
+   0.004 │A    E            ← 精度拐点区域
+         │
+         └────────────────────→ 延迟 ↓（越快）
+              800  600  400  200
+</pre>
+
+<p>右上角（高延迟、高 RMSE）是最差配置；左下角（低延迟、低 RMSE）是最优配置。你会在某些配置附近看到\"拐点\"——比如剪枝率从 20% 提高到 30%，精度突然大幅下降但速度提升不多，那 20% 就是拐点。</p>
+
+<p><strong>比赛中的意义：</strong>不需要跑完所有组合。先从\"一个维度变化\"（比如固定量化方式，只改变剪枝率）开始，找到剪枝的拐点；然后固定剪枝率，改变量化方式。这种<strong>先单因素后多因素</strong>的方法，能让你用最少的实验次数找到最优配置。</p>
+
+<hr/>
+
+<h3>三、实验结果的最终对比表</h3>
+
+<p>把所有实验数据汇总到一张表（这就是比赛答辩时评委最想看的东西）：</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">模型配置</th><th style="padding:6px;border:1px solid #90caf9;">参数量</th><th style="padding:6px;border:1px solid #90caf9;">显存(MB)</th><th style="padding:6px;border:1px solid #90caf9;">延迟(ms)</th><th style="padding:6px;border:1px solid #90caf9;">RMSE↓</th><th style="padding:6px;border:1px solid #90caf9;">ACC↑</th><th style="padding:6px;border:1px solid #90caf9;">压缩比</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><strong>Baseline</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">64M</td><td style="padding:5px;border:1px solid #e0e0e0;">2300</td><td style="padding:5px;border:1px solid #e0e0e0;">820</td><td style="padding:5px;border:1px solid #e0e0e0;">0.0030</td><td style="padding:5px;border:1px solid #e0e0e0;">0.990</td><td style="padding:5px;border:1px solid #e0e0e0;">1.0x</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">剪枝10%</td><td style="padding:5px;border:1px solid #e0e0e0;">58M</td><td style="padding:5px;border:1px solid #e0e0e0;">2090</td><td style="padding:5px;border:1px solid #e0e0e0;">700</td><td style="padding:5px;border:1px solid #e0e0e0;">0.0032</td><td style="padding:5px;border:1px solid #e0e0e0;">0.988</td><td style="padding:5px;border:1px solid #e0e0e0;">1.1x</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">剪枝20%</td><td style="padding:5px;border:1px solid #e0e0e0;">52M</td><td style="padding:5px;border:1px solid #e0e0e0;">1870</td><td style="padding:5px;border:1px solid #e0e0e0;">600</td><td style="padding:5px;border:1px solid #e0e0e0;">0.0038</td><td style="padding:5px;border:1px solid #e0e0e0;">0.985</td><td style="padding:5px;border:1px solid #e0e0e0;">1.2x</td></tr>
+  <tr style="background:#e8f5e9;"><td style="padding:5px;border:1px solid #e0e0e0;"><strong>🏆 剪枝20%+INT8+SQ</strong></td><td style="padding:5px;border:1px solid #e0e0e0;">52M</td><td style="padding:5px;border:1px solid #e0e0e0;">940</td><td style="padding:5px;border:1px solid #e0e0e0;">380</td><td style="padding:5px;border:1px solid #e0e0e0;">0.0042</td><td style="padding:5px;border:1px solid #e0e0e0;">0.978</td><td style="padding:5px;border:1px solid #e0e0e0;"><strong>2.2x</strong></td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">剪枝30%+INT8</td><td style="padding:5px;border:1px solid #e0e0e0;">46M</td><td style="padding:5px;border:1px solid #e0e0e0;">830</td><td style="padding:5px;border:1px solid #e0e0e0;">340</td><td style="padding:5px;border:1px solid #e0e0e0;">0.0058</td><td style="padding:5px;border:1px solid #e0e0e0;">0.965</td><td style="padding:5px;border:1px solid #e0e0e0;">2.4x</td></tr>
+</table>
+
+<p><strong>比赛中的意义：</strong>高亮行（剪枝20%+INT8+SmoothQuant）就是一个典型的帕累托最优解——它用很小的精度损失（RMSE +0.0012，ACC -0.012）换来了 2.2 倍的推理加速。如果比赛评分中推理速度的权重足够高，这个配置就是最佳选择。</p>
+
+<hr/>
+
+<h3>四、参赛材料的准备（技术路线图）</h3>
+
+<p>先导杯最终需要提交的不仅是模型文件，还有<strong>技术报告和答辩材料</strong>。现在开始准备，比最后 3 天加班熬夜强。</p>
+
+<h4>4.1 技术路线图</h4>
+
+<p>一张好的技术路线图说清三件事：<strong>我们做了什么、怎么做的、效果如何</strong>。</p>
+
+<p>推荐结构：</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+┌──────────────────────────────────────────────────┐
+│          原始气象模型 Pangu-Weather  (64M params)  │
+└────────┬─────────────────────────┬───────────────┘
+         │                         │
+         ▼                         ▼
+┌─────────────────┐    ┌──────────────────────┐
+│  结构化剪枝       │    │  后训练量化(PTQ)     │
+│  · Head Pruning   │    │  · INT8 对称量化     │
+│  · Taylor 评分    │    │  · SmoothQuant 平滑  │
+│  · 剪枝率 20%    │    │  · 500 样本校准集    │
+└────────┬─────────┘    └─────────┬────────────┘
+         │                         │
+         └─────────────┬───────────┘
+                       ▼
+          ┌──────────────────────┐
+          │  ONNX 导出 + onnxsim │
+          │  节点减少 35%        │
+          └──────────┬───────────┘
+                     ▼
+          ┌──────────────────────┐
+          │  国产卡推理验证       │
+          │  · 延迟: 380ms        │
+          │  · 加速比: 2.2x      │
+          │  · RMSE: 0.0042      │
+          │  · 显存: 940MB       │
+          └──────────────────────┘
+</pre>
+
+<p><strong>比赛中的意义：</strong>技术路线图是答辩时评委第一眼看到的东西。好的路线图在 30 秒内就能让评委理解你的技术方案。建议你现在就画一版草稿，后面几天随着实验数据完善再迭代。</p>
+
+<h4>4.2 技术报告提纲</h4>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">章节</th><th style="padding:6px;border:1px solid #90caf9;">内容</th><th style="padding:6px;border:1px solid #90caf9;">页数建议</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">1. 引言</td><td style="padding:5px;border:1px solid #e0e0e0;">赛题背景、baseline 分析、优化目标</td><td style="padding:5px;border:1px solid #e0e0e0;">1-2 页</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">2. 技术方案</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝 + 量化 + 低秩分解的设计与原理</td><td style="padding:5px;border:1px solid #e0e0e0;">3-5 页</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">3. 实验分析</td><td style="padding:5px;border:1px solid #e0e0e0;">实验设计、对比表、帕累托分析</td><td style="padding:5px;border:1px solid #e0e0e0;">2-3 页</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">4. 创新点</td><td style="padding:5px;border:1px solid #e0e0e0;">你们独特的方法/组合/调优</td><td style="padding:5px;border:1px solid #e0e0e0;">1-2 页</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">5. 总结</td><td style="padding:5px;border:1px solid #e0e0e0;">最终效果、后续改进方向</td><td style="padding:5px;border:1px solid #e0e0e0;">1 页</td></tr>
+</table>
+
+<hr/>
+
+<h3>五、最后 4 天的冲刺计划（Day 21-24）</h3>
+
+<p>从明天开始，理论学习基本结束，进入<strong>冲顶优化 + 文档准备</strong>阶段。</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">日期</th><th style="padding:6px;border:1px solid #90caf9;">天数</th><th style="padding:6px;border:1px solid #90caf9;">重点任务</th><th style="padding:6px;border:1px solid #90caf9;">预期产出</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">7/06</td><td style="padding:5px;border:1px solid #e0e0e0;">Day 21</td><td style="padding:5px;border:1px solid #e0e0e0;">Profiler 分析：定位推理引擎中未被自动融合的瓶颈算子</td><td style="padding:5px;border:1px solid #e0e0e0;">瓶颈分析报告 + Flame Graph</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">7/07</td><td style="padding:5px;border:1px solid #e0e0e0;">Day 22</td><td style="padding:5px;border:1px solid #e0e0e0;">自定义 Kernel 探索（HIP 编写 LayerNorm 替换实验）</td><td style="padding:5px;border:1px solid #e0e0e0;">自定义 Kernel 速度对比</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">7/08</td><td style="padding:5px;border:1px solid #e0e0e0;">Day 23</td><td style="padding:5px;border:1px solid #e0e0e0;">全排列组合实验 + A/B 表格整理</td><td style="padding:5px;border:1px solid #e0e0e0;">最终对比表 + 选择最优配置</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">7/09</td><td style="padding:5px;border:1px solid #e0e0e0;">Day 24</td><td style="padding:5px;border:1px solid #e0e0e0;">技术报告 + 答辩 PPT + 模型打包</td><td style="padding:5px;border:1px solid #e0e0e0;">完整的参赛提交包</td></tr>
+</table>
+
+<p><strong>关键提醒：</strong></p>
+<ul>
+  <li>Day 21-22 的\"高级算子优化\"是<strong>选修</strong>。如果你们团队的剪枝+量化已经达到了满意的速度和精度，可以直接跳过这两天，全力做最终实验和文档。</li>
+  <li>Day 23-24 是<strong>必修</strong>。无论你前面做了多少，最后两天一定要留出足够的时间做组合实验和文档整理。</li>
+  <li>从现在开始，每天结束时花 10 分钟更新你的实验跟踪 JSON 文件——不要等到最后。</li>
+</ul>
+
+<hr/>
+
+<h3>六、最终提交清单（Checklist）</h3>
+
+<p>比赛提交当天，对照这张表逐项检查：</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">✅</th><th style="padding:6px;border:1px solid #90caf9;">项目</th><th style="padding:6px;border:1px solid #90caf9;">说明</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">☐</td><td style="padding:5px;border:1px solid #e0e0e0;">模型文件</td><td style="padding:5px;border:1px solid #e0e0e0;">优化后的 ONNX 模型，确保静态 shape 与赛题要求一致</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">☐</td><td style="padding:5px;border:1px solid #e0e0e0;">推理脚本</td><td style="padding:5px;border:1px solid #e0e0e0;">能独立运行，输入输出符合竞赛接口规范</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">☐</td><td style="padding:5px;border:1px solid #e0e0e0;">依赖清单</td><td style="padding:5px;border:1px solid #e0e0e0;">requirements.txt，只包含必要依赖，版本固定</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">☐</td><td style="padding:5px;border:1px solid #e0e0e0;">技术报告</td><td style="padding:5px;border:1px solid #e0e0e0;">含技术路线图、实验对比表、创新点</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">☐</td><td style="padding:5px;border:1px solid #e0e0e0;">国产卡验证</td><td style="padding:5px;border:1px solid #e0e0e0;">在比赛指定的国产卡上跑通过，精度和速度均已测量</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">☐</td><td style="padding:5px;border:1px solid #e0e0e0;">命名规范</td><td style="padding:5px;border:1px solid #e0e0e0;">模型/脚本/配置文件命名统一，不带 v1_v2_final 等混乱后缀</td></tr>
+</table>
+
+<hr/>
+
+<h3>七、24 天学习之路回顾</h3>
+
+<p>今天是第 20 天。回头看，我们已经走了很远：</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">阶段</th><th style="padding:6px;border:1px solid #90caf9;">天数</th><th style="padding:6px;border:1px solid #90caf9;">学到了什么</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">一、模型本体理解</td><td style="padding:5px;border:1px solid #e0e0e0;">1-5</td><td style="padding:5px;border:1px solid #e0e0e0;">Pangu-Weather 架构、Transformer 注意力、剪枝、低秩分解、量化基础</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">二、部署工具链</td><td style="padding:5px;border:1px solid #e0e0e0;">6-10</td><td style="padding:5px;border:1px solid #e0e0e0;">ONNX 导出与优化、GPU 内存模型、算子融合、国产智算生态（DTK/HIP）</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">三、精度-速度权衡</td><td style="padding:5px;border:1px solid #e0e0e0;">11-20</td><td style="padding:5px;border:1px solid #e0e0e0;">RMSE/ACC 指标、剪枝+量化实验设计、Benchmarking、管线自动化</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">四、冲顶优化</td><td style="padding:5px;border:1px solid #e0e0e0;">21-24</td><td style="padding:5px;border:1px solid #e0e0e0;">高级算子优化、全排列实验、技术报告与答辩准备</td></tr>
+</table>
+
+<p>所有这些知识最终都是为了回答同一个问题：<strong>在精度损失可控的范围内，如何最大化气象大模型在国产卡上的推理速度？</strong></p>
+
+<hr/>
+
+<h3>八、常见误区</h3>
+
+<ol>
+  <li><b>"Makefile 是古董，没必要学"</b>——在比赛场景下，Makefile 的增量构建能力能帮你节省大量等待时间。当然，用 Shell 脚本也可以，但 Makefile 更优雅。</li>
+  <li><b>"留到最后两天再做组合实验"</b>——组合实验需要大量时间跑。建议明天（Day 21）就开始跑 Day 23 的排列组合实验，跑完再深入做算子优化。</li>
+  <li><b>"技术报告最后写一下就行"</b>——好的技术报告需要迭代 2-3 遍。现在就可以把技术路线图草稿画出来，每天根据实验成果修改。</li>
+  <li><b>"所有实验都要做满"</b>——不是的。先做单因素实验找到拐点，再只做拐点附近的组合实验。10 个精心设计的实验比 50 个盲目组合更有价值。</li>
+  <li><b>"答辩才需要技术路线图"</b>——技术路线图也是你自己工作的导航图。画了它你才知道下一步该做什么，整体方案缺什么。</li>
+</ol>
+
+<hr/>
+<h3>📅 明日预告（Day 21）：高级算子优化（选修）</h3>
+<p>明天开始进入第四阶段——冲顶优化。首先学习如何用 PyTorch Profiler 识别推理引擎中未被自动融合的瓶颈算子，以及从 Profiler 结果到自定义 HIP Kernel 的开发全流程。</p>
+<p>注：这是选修内容。如果你们的剪枝+量化方案已经达到满意的速度和精度，可以跳过这几天，直接进入 Day 23 的全排列组合实验。</p>
       ]]></description>
     </item>
 
