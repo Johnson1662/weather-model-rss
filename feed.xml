@@ -5,7 +5,7 @@
     <link>https://johnson1662.github.io/weather-model-rss/</link>
     <description>围绕2026年先导杯"基于国产科学智算生态的气象大模型推理部署优化"赛题，每日推送一篇零基础精讲文章，覆盖模型压缩、量化、推理加速等理论知识。</description>
     <language>zh-CN</language>
-    <lastBuildDate>2026-07-05 22:00:00 +0800</lastBuildDate>
+    <lastBuildDate>2026-07-08 10:25:12 +0800</lastBuildDate>
     <ttl>1440</ttl>
 
     <item>
@@ -1510,6 +1510,331 @@ for (int i = tid; i < D/4; i += blockDim.x) {
 <h3>📅 明日预告（Day 23）：最终组合实验与文档准备</h3>
 <p>明天进入第 23 天——比赛的收官阶段！我们将跑完所有排列组合实验（剪枝率 × 量化方式 × 是否低秩分解），整理最终对比表，选择最优配置。还会一起准备好技术报告大纲、技术路线图和答辩材料。</p>
 <p>这是理论学习的最后一篇精讲。后面两天将完全聚焦在动手实践和比赛提交上。</p>
+      ]]></description>
+    </item>
+    <item>
+      <title>第23天：最终组合实验与文档准备 | 零基础精讲</title>
+      <link>https://arxiv.org/abs/2509.04244</link>
+      <guid>weather-learning-day23-2026-07-08</guid>
+      <pubDate>2026-07-08 22:00:00 +0800</pubDate>
+      <description><![CDATA[
+
+<h2>今日主题：最终组合实验与文档准备 — 从压缩方案到比赛提交的完整冲刺</h2>
+
+<p>前 22 天我们像盖楼一样，一块砖一块砖地把气象大模型推理优化的知识体系搭建起来：</p>
+<ul>
+  <li><b>第 1-2 天</b>：理解了 Pangu-Weather 架构和注意力机制</li>
+  <li><b>第 3-5 天</b>：学会了模型压缩三大招——剪枝、低秩分解、量化</li>
+  <li><b>第 6-10 天</b>：掌握了部署工具链——ONNX、计算图优化、GPU 内存、国产智算生态</li>
+  <li><b>第 11-12 天</b>：学会了气象指标 RMSE 和 ACC</li>
+  <li><b>第 13-18 天</b>：深入剪枝实验、量化实验、推理引擎 Benchmark</li>
+  <li><b>第 19-22 天</b>：学习了系统集成 MLOps 和自定义 Kernel 开发</li>
+</ul>
+<p>今天（第 23 天）是比赛的<strong>收官冲刺</strong>：把前面所有技术排列组合，用实验数据说话，找出比赛的最优配置。同时准备<strong>技术报告和答辩材料</strong>。</p>
+
+<hr/>
+
+<h3>一、为什么需要排列组合？一个比喻</h3>
+
+<p>想象你是厨师，有三大调料：</p>
+<ul>
+  <li><b>剪枝（Pruning）</b> = 切掉食材的边角余料</li>
+  <li><b>低秩分解（Low-rank）</b> = 把大块食材切成薄片</li>
+  <li><b>量化（Quantization）</b> = 换用小一号的锅铲</li>
+</ul>
+<p>每种调料单独用都能省点时间，但<strong>组合使用</strong>效果可能叠加，也可能互相抵消。</p>
+
+<p>比如：</p>
+<ul>
+  <li><b>剪枝 + 量化</b>：先剪掉不重要的参数，再量化剩下的。1+1 ≥ 2？</li>
+  <li><b>剪枝 + 低秩 + 量化</b>：三重压缩，模型变得极小，但精度是否崩了？</li>
+  <li><b>纯剪枝</b>：最简单的方案，但压缩率有限</li>
+</ul>
+
+<p>比赛只允许提交<strong>一个最终模型</strong>。你必须在有限的实验时间内，找到那个<strong>"精度损失最小、推理速度最快"</strong>的最佳组合。这就是<strong>排列组合实验</strong>的意义。</p>
+
+<hr/>
+
+<h3>二、四种压缩方案的对比</h3>
+
+<p>下面这张图展示了从基线模型到最终提交的完整实验设计流程，你可以对照着理解各方案的执行顺序：</p>
+<p><img src="https://johnson1662.github.io/weather-model-rss/diagrams/experiment-pipeline.svg" alt="实验流水线设计图" style="max-width:100%;border-radius:8px;"/></p>
+
+<p>我们把这 22 天学到的技术归纳为四种可选的压缩方案。你需要针对 Pangu-Weather 跑四组实验：</p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">方案</th><th style="padding:6px;border:1px solid #90caf9;">包含的技术</th><th style="padding:6px;border:1px solid #90caf9;">压缩率（估计）</th><th style="padding:6px;border:1px solid #90caf9;">精度风险</th><th style="padding:6px;border:1px solid #90caf9;">实现复杂度</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>纯剪枝</b></td><td style="padding:5px;border:1px solid #e0e0e0;">结构化剪枝（剪 Attention Head 或 FFN 通道）</td><td style="padding:5px;border:1px solid #e0e0e0;">~30%</td><td style="padding:5px;border:1px solid #e0e0e0;">🟢 低</td><td style="padding:5px;border:1px solid #e0e0e0;">★☆☆</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>剪枝+低秩</b></td><td style="padding:5px;border:1px solid #e0e0e0;">先剪枝，再对剩余 Linear 层做 SVD 低秩近似</td><td style="padding:5px;border:1px solid #e0e0e0;">~40-50%</td><td style="padding:5px;border:1px solid #e0e0e0;">🟡 中</td><td style="padding:5px;border:1px solid #e0e0e0;">★★☆</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>剪枝+量化</b></td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝后做 PTQ/SmoothQuant INT8 量化</td><td style="padding:5px;border:1px solid #e0e0e0;">~70%</td><td style="padding:5px;border:1px solid #e0e0e0;">🟡 中高</td><td style="padding:5px;border:1px solid #e0e0e0;">★★☆</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;"><b>全流程</b></td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝 → 低秩分解 → INT8 量化</td><td style="padding:5px;border:1px solid #e0e0e0;">~75-85%</td><td style="padding:5px;border:1px solid #e0e0e0;">🔴 高</td><td style="padding:5px;border:1px solid #e0e0e0;">★★★</td></tr>
+</table>
+
+<p><strong>比赛中的意义：</strong>如果时间紧张，建议<strong>优先跑剪枝+量化</strong>——它压缩率大、实现成熟、精度风险可控。全流程方案作为备选，如果精度崩了就降级。"纯剪枝"作为安全 baseline，保底提交。</p>
+
+<hr/>
+
+<h3>三、排列组合的实验设计：一个模板</h3>
+
+<p>实验设计的基本原则是<strong>控制变量</strong>——每次只改变一个因素，才能判断每个因素的实际贡献。下面是一个针对 Pangu-Weather 的实验模板：</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+┌──────────────────────────────────────────────────────────────┐
+│               Pangu-Weather 压缩实验设计模板                   │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Baseline: 原始 Pangu-Weather → FP32 → ONNX                  │
+│  记录: 参数量 / 显存 / 延迟 / RMSE / ACC                      │
+│                                                              │
+│  ┌─ Exp 1: 纯剪枝                                            │
+│  │  剪枝率: {10%, 20%, 30%}                                   │
+│  │  策略: Head Pruning (Stage 3-4)                           │
+│  │  记录: 剪枝后参数量 / 剪枝后延迟 / RMSE↑ / ACC↓            │
+│  │                                                          │
+│  ├─ Exp 2: 剪枝 + 低秩分解                                    │
+│  │  剪枝率: 20% (最佳折中)                                    │
+│  │  低秩率: {25%, 50%, 75%} (即 SVD 保留奇异值比例)            │
+│  │  注意: 只对 FFN 的 Linear 层做 SVD，Attention 层不做        │
+│  │                                                          │
+│  ├─ Exp 3: 剪枝 + INT8 量化                                   │
+│  │  剪枝率: 20%                                              │
+│  │  量化方式: PTQ / SmoothQuant                              │
+│  │  注意: 最后一层保持 FP16，激活异常值层用 per-channel 量化    │
+│  │                                                          │
+│  └─ Exp 4: 全流程 (剪枝 + 低秩 + 量化)                        │
+│      剪枝率: 10% (保守)                                       │
+│      低秩率: 25% (保守)                                       │
+│      量化: SmoothQuant INT8                                  │
+│      预期: 压缩率最高，精度风险最大                             │
+└──────────────────────────────────────────────────────────────┘
+</pre>
+
+<p><strong>核心建议：</strong>先跑 Exp 1 找出最佳剪枝率（精度拐点），再用这个剪枝率跑 Exp 2/3/4。这样不需要重复剪枝实验，节省时间。</p>
+
+<hr/>
+
+<h3>四、如何找到"精度拐点"？</h3>
+
+<p><strong>精度拐点（Accuracy Knee Point）</strong>是实验设计中最关键的概念。</p>
+
+<p>想象你在剪一个树：</p>
+<ul>
+  <li>剪掉 10% 的叶子 → 树看起来没变化（精度几乎不变）</li>
+  <li>剪掉 20% 的叶子 → 树还在，但少了点茂盛（精度轻微下降）</li>
+  <li>剪掉 50% 的叶子 → 树秃了，光合作用严重受影响（精度急剧下降）</li>
+</ul>
+
+<p>"精度拐点"就是那个<strong>"再剪一点，精度就会突然崩掉"</strong>的临界点。你的目标就是找到这个拐点，把压缩率踩在极限上。</p>
+
+<p>寻找方法：</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+剪枝率:   0%   10%   20%   30%   40%   50%
+RMSE:    0.28  0.28  0.29  0.31  0.38  0.55
+                         ↑              ↑
+                   拐点在这附近   精度已崩
+</pre>
+
+<p>上图中，20% 到 30% 之间 RMSE 跳升了 0.02，30% 到 40% 跳升了 0.07——<strong>拐点在 20-30% 之间</strong>。所以最佳剪枝率是 <b>20%</b>。</p>
+
+<p><strong>比赛中的意义：</strong>比赛中精度权重大于速度权重。保守选择拐点前一级剪枝率（如上例选 20%）比激进选 30% 更安全。</p>
+
+<hr/>
+
+<h3>五、如何做 A/B 对比实验？</h3>
+
+<p>A/B 实验的核心理念：<strong>一次只变一个东西，才能知道是谁造成了变化。</strong></p>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">对比组</th><th style="padding:6px;border:1px solid #90caf9;">变量 A</th><th style="padding:6px;border:1px solid #90caf9;">变量 B</th><th style="padding:6px;border:1px solid #90caf9;">结论</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">Baseline vs 纯剪枝</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝率 20%</td><td style="padding:5px;border:1px solid #e0e0e0;">—</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝单独贡献了多少加速</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">纯剪枝 vs 剪枝+量化</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝率 20%</td><td style="padding:5px;border:1px solid #e0e0e0;">INT8 量化</td><td style="padding:5px;border:1px solid #e0e0e0;">量化在剪枝基础上额外贡献了多少</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">剪枝+低秩 vs 剪枝+量化</td><td style="padding:5px;border:1px solid #e0e0e0;">剪枝率 20%</td><td style="padding:5px;border:1px solid #e0e0e0;">低秩 vs 量化</td><td style="padding:5px;border:1px solid #e0e0e0;">两种二级压缩哪条路更好</td></tr>
+</table>
+
+<p>对比时记录的数据：</p>
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">指标</th><th style="padding:6px;border:1px solid #90caf9;">Baseline</th><th style="padding:6px;border:1px solid #90caf9;">剪枝20%</th><th style="padding:6px;border:1px solid #90caf9;">剪枝20%+量化</th><th style="padding:6px;border:1px solid #90caf9;">全流程</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">参数量 (M)</td><td style="padding:5px;border:1px solid #e0e0e0;">500</td><td style="padding:5px;border:1px solid #e0e0e0;">400</td><td style="padding:5px;border:1px solid #e0e0e0;">400</td><td style="padding:5px;border:1px solid #e0e0e0;">380</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">显存 (GB)</td><td style="padding:5px;border:1px solid #e0e0e0;">4.0</td><td style="padding:5px;border:1px solid #e0e0e0;">3.2</td><td style="padding:5px;border:1px solid #e0e0e0;">1.2</td><td style="padding:5px;border:1px solid #e0e0e0;">1.0</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">延迟 (ms)</td><td style="padding:5px;border:1px solid #e0e0e0;">42</td><td style="padding:5px;border:1px solid #e0e0e0;">33</td><td style="padding:5px;border:1px solid #e0e0e0;">18</td><td style="padding:5px;border:1px solid #e0e0e0;">15</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">RMSE (Z500) ↓</td><td style="padding:5px;border:1px solid #e0e0e0;">0.28</td><td style="padding:5px;border:1px solid #e0e0e0;">0.29</td><td style="padding:5px;border:1px solid #e0e0e0;">0.32</td><td style="padding:5px;border:1px solid #e0e0e0;">0.38</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">ACC ↑</td><td style="padding:5px;border:1px solid #e0e0e0;">0.95</td><td style="padding:5px;border:1px solid #e0e0e0;">0.94</td><td style="padding:5px;border:1px solid #e0e0e0;">0.91</td><td style="padding:5px;border:1px solid #e0e0e0;">0.86</td></tr>
+</table>
+
+<p><strong>评分公式模拟：</strong>假设比赛总分为 Speed_score × Accuracy_score：</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+方案               延迟     RMSE   总分(简化)
+Baseline           42ms    0.28   60分
+纯剪枝 20%         33ms    0.29   72分  ← 简单直接，性价比不错
+剪枝20%+量化        18ms    0.32   85分  ← 最佳折中
+全流程              15ms    0.38   70分  ← 精度损失太大
+</pre>
+
+<p><strong>比赛中的意义：</strong>上面这个例子中，"剪枝20%+量化"是冠军方案。全流程虽然最快，但 ACC 从 0.95 跌到 0.86，精度扣分太多，总分反而更低。这就是排列组合实验的价值——<strong>用数字说话，而不是凭感觉</strong>。</p>
+
+<hr/>
+
+<h3>六、实验记录模板：用表格管好每一组数据</h3>
+
+<p>比赛中你会跑至少 10-15 组实验。没有系统化的记录，你到后期根本分不清哪组是哪组。</p>
+
+<p>推荐用 CSV 或 JSON 格式记录每一条实验：</p>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+# experiments.csv
+exp_id,date,description,params_pruning_rate,params_lowrank_rate,params_quant_bit,\
+latency_ms,memory_gb,rmse_z500,acc_z500,notes
+Exp00,2026-07-01,Baseline FP32,0,,32,42.3,4.0,0.281,0.951,原始模型
+Exp01,2026-07-02,纯剪枝10%,0.1,,32,38.1,3.6,0.283,0.949,Stage4 head pruning
+Exp02,2026-07-02,纯剪枝20%,0.2,,32,33.2,3.2,0.288,0.944,
+Exp03,2026-07-03,纯剪枝30%,0.3,,32,28.5,2.8,0.308,0.921,接近精度拐点!
+Exp04,2026-07-04,剪枝20%+低秩25%,0.2,0.25,32,30.1,3.0,0.296,0.938,FFN层SVD
+Exp05,2026-07-05,剪枝20%+INT8,0.2,,8,18.2,1.2,0.321,0.912,PTQ smoothquant
+Exp06,2026-07-06,全流程保守,0.1,0.25,8,15.3,1.0,0.383,0.861,精度崩了
+</pre>
+
+<p><strong>比赛中的意义：</strong>在做第 15 组实验时，你还能清楚记得第 3 组的结果——前提是记录下来了。每次跑完实验，第一时间更新这个 CSV 文件。建议用 Git 跟踪它，这样还能看到实验历史。</p>
+
+<hr/>
+
+<h3>七、如何选择最终方案？多目标决策</h3>
+
+<p>你的目标不是"找到最快的模型"也不是"找到最准的模型"，而是<strong>找到比赛规则下的最优模型</strong>。</p>
+
+<p>一般比赛评分公式为：</p>
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+Score = 0.5 × Speed_Score + 0.5 × Accuracy_Score
+
+其中：
+Speed_Score  = min(baseline_latency / your_latency, 1.0) × 100
+Accuracy_Score = min(your_ACC / baseline_ACC, 1.0) × 100
+</pre>
+
+<p>这意味着：</p>
+<ul>
+  <li>加速到 baseline 的 2 倍以上时，Speed_Score 就满分了（再快不加分）</li>
+  <li>如果精度掉到 baseline 的 95% 以下，Accuracy_Score 就被扣了很多</li>
+  <li>比赛有时会要求"ACC 下降不超过 5%"之类的硬约束</li>
+</ul>
+
+<p><strong>决策步骤：</strong></p>
+<ol>
+  <li>列出所有实验方案的 <b>延迟 + RMSE + ACC</b> 数据</li>
+  <li>读比赛规则，明确精度约束条件（如 ACC ≥ baseline × 0.95）</li>
+  <li>排除不满足精度约束的方案</li>
+  <li>在剩余方案中选延迟最低（或分数最高）的方案</li>
+  <li>如果两组方案得分接近，选实现更简单的——少一个出错的环节</li>
+</ol>
+
+<hr/>
+
+<h3>八、准备技术报告和答辩材料</h3>
+
+<p>先导杯通常要求提交<strong>技术报告+答辩 PPT</strong>。以下是推荐的大纲：</p>
+
+<h4>8.1 技术报告结构</h4>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+1. 赛题理解与分析
+   1.1 赛题背景（国产智算生态 × 气象大模型）
+   1.2 优化目标和约束条件
+   1.3 Baseline 分析（Pangu-Weather 的瓶颈在哪里）
+
+2. 技术路线
+   2.1 整体方案设计（配技术路线图）
+   2.2 模型剪枝（策略、剪枝率选择、精度变化曲线）
+   2.3 低秩分解（可选，SVD 奇异值谱分析）
+   2.4 模型量化（PTQ/SmoothQuant、异常值处理）
+   2.5 推理加速（ONNX 图优化、算子融合、自定义 Kernel 等）
+
+3. 实验与分析
+   3.1 实验设计（排列组合方案表）
+   3.2 实验结果汇总（对比表）
+   3.3 精度-速度权衡分析
+   3.4 消融实验（每个技术的单独贡献）
+
+4. 部署与验证
+   4.1 国产卡部署流程
+   4.2 兼容性验证
+   4.3 最终 Benchmark
+
+5. 总结与创新点
+   5.1 方案总结
+   5.2 创新点说明
+   5.3 可改进方向
+</pre>
+
+<h4>8.2 答辩 PPT 要点</h4>
+<ul>
+  <li><b>第 1 页：</b>封面（队名、队员、学校/单位）</li>
+  <li><b>第 2 页：</b>技术路线图（一张大图展示全流程，用我们之前画的 SVG 图）</li>
+  <li><b>第 3 页：</b>Baseline 分析（Pangu 架构、计算瓶颈、Profiler 截图）</li>
+  <li><b>第 4-6 页：</b>三个核心技术（剪枝/低秩/量化）各一页，配关键公式和流程图</li>
+  <li><b>第 7 页：</b>实验对比表（所有方案放在一张表上，标出最终选择）</li>
+  <li><b>第 8 页：</b>精度-速度权衡曲线（横坐标=延迟，纵坐标=ACC，每个方案一个点）</li>
+  <li><b>第 9 页：</b>创新点（1-3 个，每个不超过一句话）</li>
+  <li><b>第 10 页：</b>致谢</li>
+</ul>
+
+<p><strong>比赛中的意义：</strong>技术报告和答辩和模型一样重要。很多队伍模型压缩做得好但写在报告上表达不清楚，被评委误判。条理清晰、数据完整、有对比、有分析，这些是加分的关键。</p>
+
+<hr/>
+
+<h3>九、一个推荐的"冲刺四天"时间表</h3>
+
+<pre style="background:#f5f5f5;padding:10px;border-radius:6px;font-size:13px;">
+Day 23 (今天):  排列组合实验跑完
+  上午: 跑 Exp 1 (纯剪枝 10%/20%/30%)
+  下午: 跑 Exp 2/3/4 (低秩/量化/全流程)
+  晚上: 整理实验记录 CSV
+
+Day 24: 最终方案确定 + 技术报告
+  上午: 分析实验数据，选出最优方案
+  下午: 撰写技术报告初稿
+  晚上: 准备答辩 PPT 初稿
+
+Day 25: 国产卡上验证 + 联调
+  全天: 在国产卡上跑通最终方案
+  晚上: 修复兼容性问题和精度差异
+
+Day 26-27: 答辩排练 + 提交
+  上午: 模拟答辩
+  下午: 打包提交材料
+  晚上: 最终检查并提交
+</pre>
+
+<hr/>
+
+<h3>十、核心概念速查表</h3>
+
+<table style="border-collapse:collapse;width:100%;margin:8px 0;">
+  <tr style="background:#e3f2fd;"><th style="padding:6px;border:1px solid #90caf9;">概念</th><th style="padding:6px;border:1px solid #90caf9;">一句话解释</th><th style="padding:6px;border:1px solid #90caf9;">比赛中的意义</th></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">精度拐点</td><td style="padding:5px;border:1px solid #e0e0e0;">压缩率超过这个点，精度会急剧下降</td><td style="padding:5px;border:1px solid #e0e0e0;">把压缩率踩在拐点前一级，最安全</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">控制变量</td><td style="padding:5px;border:1px solid #e0e0e0;">每次实验只改一个参数</td><td style="padding:5px;border:1px solid #e0e0e0;">这样才能判断每个技术的单独贡献</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">消融实验</td><td style="padding:5px;border:1px solid #e0e0e0;">逐一去掉某个组件，看它对精度的影响</td><td style="padding:5px;border:1px solid #e0e0e0;">证明你用的每个技术都是必要的</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">多目标决策</td><td style="padding:5px;border:1px solid #e0e0e0;">在速度、精度、稳定性等多个目标中权衡</td><td style="padding:5px;border:1px solid #e0e0e0;">比赛不只看单项，要看综合得分</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">技术路线图</td><td style="padding:5px;border:1px solid #e0e0e0;">一张图展示从原始模型到最终提交的完整流程</td><td style="padding:5px;border:1px solid #e0e0e0;">答辩时第一张被问到的图，必须清晰</td></tr>
+  <tr><td style="padding:5px;border:1px solid #e0e0e0;">实验跟踪</td><td style="padding:5px;border:1px solid #e0e0e0;">用 CSV/JSON 记录每组实验的参数和结果</td><td style="padding:5px;border:1px solid #e0e0e0;">10+ 组实验不记录等于白做</td></tr>
+</table>
+
+<hr/>
+
+<h3>十一、常见误区</h3>
+<ul>
+  <li><b>"只要尽可能压缩就能拿高分"</b>——错。比赛通常是<strong>精度×速度</strong>的综合评分。压缩 85% 但精度崩了，总分可能还不如压缩 60% 但精度微降的方案。</li>
+  <li><b>"所有实验一次性设计好再跑"</b>——错。应该<strong>迭代式实验</strong>：先跑 Exp 1 找出最佳剪枝率，再用这个剪枝率跑后面的组合。一次性设计好所有实验容易浪费资源。</li>
+  <li><b>"技术报告最后写就行"</b>——错。边做实验边写报告，实验数据第一时间写进去。最后两天通常不够写一份好的技术报告。</li>
+  <li><b>"答辩 PPT 放越多越专业"</b>——错。一页一句话的核心发现，比一页堆满文字更有说服力。评委时间有限，只看关键结论。</li>
+  <li><b>"国产卡上的表现肯定和 NVIDIA 一样"</b>——错。必须留时间在国产卡上验证。精度差异、算子兼容性、甚至显存带宽不同都可能导致在 NVIDIA 卡上跑通的方案在国产卡上出问题。</li>
+  <li><b>"创新点要高大上"</b>——错。比赛中最好的创新点是<strong>"基于已有的技术，做了什么样的组合或适配"</strong>。比如"针对国产卡算子库缺失，设计了替代方案并验证等价性"就是一个很好的创新点。</li>
+</ul>
+
+<hr/>
+
+<h3>📅 明日预告（Day 24）：最终冲刺与提交准备</h3>
+<p>明天的精讲将是本次先导杯备赛理论学习的<strong>最后一篇</strong>。我们将讲解：如何做最终的方案部署和验证、如何打包提交材料（模型+报告+代码）、以及最终的 check-list。还会一起回顾这 24 天学到的全部知识体系，帮助你在比赛前做最后一次复习。</p>
+<p>前置知识：无。这是收官之篇，也是一份"比赛急救指南"。</p>
+
       ]]></description>
     </item>
   </channel>
